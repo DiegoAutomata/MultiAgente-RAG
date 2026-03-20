@@ -1,0 +1,512 @@
+
+> saas-factory-app@0.1.0 build
+> next build
+
+▲ Next.js 16.2.0 (Turbopack)
+- Environments: .env.local, .env
+
+  Creating an optimized production build ...
+
+> Build error occurred
+Error: Turbopack build failed with 21 errors:
+./src/features/ai/components/Chat.tsx:3:1
+Module not found: Can't resolve 'ai/react'
+  [90m1 |[0m ...[32mse client"[0m;
+  [90m2 |[0m ...
+[31m[1m>[0m [90m3 |[0m ...[36mport[0m { useChat } [36mfrom[0m [32m"ai/react"[0m;
+  [90m  |[0m    [31m[1m^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^[0m
+  [90m4 |[0m ...[36mport[0m { [33mBot[0m } [36mfrom[0m [32m"lucide-react"[0m;
+  [90m5 |[0m ...[36mport[0m { motion, [33mAnimatePresence[0m...
+  [90m6 |[0m ...[36mport[0m { [33mGenerativeChart[0m } [36mfrom[0m [32m...[0m
+
+
+
+Import trace:
+  Server Component:
+    ./src/features/ai/components/Chat.tsx
+    ./src/app/page.tsx
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/@nodelib/fs.scandir/out/adapters/fs.js:4:12
+Module not found: Can't resolve 'fs'
+  [90m2 |[0m ...[33mject[0m.defineProperty(exports, [32m"...[0m
+  [90m3 |[0m ...ports.createFileSystemAdapter ...
+[31m[1m>[0m [90m4 |[0m ...[36mnst[0m fs = require([32m"fs"[0m);
+  [90m  |[0m             [31m[1m^^^^^^^^^^^^^[0m
+  [90m5 |[0m ...ports.[33mFILE_SYSTEM_ADAPTER[0m = {
+  [90m6 |[0m ...  lstat: fs.lstat,
+  [90m7 |[0m ...  stat: fs.stat,
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/@nodelib/fs.scandir/out/adapters/fs.js [Client Component Browser]
+    ./node_modules/@nodelib/fs.scandir/out/settings.js [Client Component Browser]
+    ./node_modules/@nodelib/fs.scandir/out/index.js [Client Component Browser]
+    ./node_modules/@nodelib/fs.walk/out/settings.js [Client Component Browser]
+    ./node_modules/@nodelib/fs.walk/out/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/node_modules/fast-glob/out/readers/sync.js [Client Component Browser]
+    ./node_modules/tailwindcss/node_modules/fast-glob/out/providers/sync.js [Client Component Browser]
+    ./node_modules/tailwindcss/node_modules/fast-glob/out/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/content.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/@nodelib/fs.stat/out/adapters/fs.js:4:12
+Module not found: Can't resolve 'fs'
+  [90m2 |[0m ...[33mject[0m.defineProperty(exports, [32m"...[0m
+  [90m3 |[0m ...ports.createFileSystemAdapter ...
+[31m[1m>[0m [90m4 |[0m ...[36mnst[0m fs = require([32m"fs"[0m);
+  [90m  |[0m             [31m[1m^^^^^^^^^^^^^[0m
+  [90m5 |[0m ...ports.[33mFILE_SYSTEM_ADAPTER[0m = {
+  [90m6 |[0m ...  lstat: fs.lstat,
+  [90m7 |[0m ...  stat: fs.stat,
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/@nodelib/fs.stat/out/adapters/fs.js [Client Component Browser]
+    ./node_modules/@nodelib/fs.stat/out/settings.js [Client Component Browser]
+    ./node_modules/@nodelib/fs.stat/out/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/node_modules/fast-glob/out/readers/stream.js [Client Component Browser]
+    ./node_modules/tailwindcss/node_modules/fast-glob/out/providers/stream.js [Client Component Browser]
+    ./node_modules/tailwindcss/node_modules/fast-glob/out/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/content.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/babel.js:1:110659
+Module not found: Can't resolve 'fs'
+[31m[1m>[0m [90m1 |[0m ....exports=require([32m"fs"[0m)},module...
+  [90m  |[0m             [31m[1m^^^^^^^^^^^^^[0m
+  [90m2 |[0m ...
+  [90m3 |[0m ...
+  [90m4 |[0m ...
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/babel.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/jiti.js:1:61059
+Module not found: Can't resolve 'fs'
+[31m[1m>[0m [90m1 |[0m ....exports=require([32m"fs"[0m)},module...
+  [90m  |[0m             [31m[1m^^^^^^^^^^^^^[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/jiti.js [Client Component Browser]
+    ./node_modules/jiti/lib/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/jiti.js:1:209925
+Module not found: Can't resolve 'fs'
+[31m[1m>[0m [90m1 |[0m ...ceObject=require([32m"fs"[0m);[33mMath[0m.fl...
+  [90m  |[0m             [31m[1m^^^^^^^^^^^^^[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/jiti.js [Client Component Browser]
+    ./node_modules/jiti/lib/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/lib/corePlugins.js:19:52
+Module not found: Can't resolve 'fs'
+  [90m17 |[0m ...
+  [90m18 |[0m ...
+[31m[1m>[0m [90m19 |[0m ...default(require([32m"fs"[0m));
+  [90m   |[0m            [31m[1m^^^^^^^^^^^^^[0m
+  [90m20 |[0m ...e_wildcard(require([32m"path"[0m));
+  [90m21 |[0m ...uire_default(require([32m"postcss.[0m..
+  [90m22 |[0m ..._interop_require_default(requ...
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/lib/corePlugins.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupContextUtils.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/processTailwindFeatures.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/lib/lib/content.js:23:52
+Module not found: Can't resolve 'fs'
+  [90m21 |[0m ...
+  [90m22 |[0m ...
+[31m[1m>[0m [90m23 |[0m ...default(require([32m"fs"[0m));
+  [90m   |[0m            [31m[1m^^^^^^^^^^^^^[0m
+  [90m24 |[0m ...e_default(require([32m"path"[0m));
+  [90m25 |[0m ...ire_default(require([32m"is-glob"[0m));
+  [90m26 |[0m ...quire_default(require([32m"fast-g...[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/lib/lib/content.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/lib/lib/expandTailwindAtRules.js:11:52
+Module not found: Can't resolve 'fs'
+  [90m 9 |[0m ...
+  [90m10 |[0m ...
+[31m[1m>[0m [90m11 |[0m ...default(require([32m"fs"[0m));
+  [90m   |[0m            [31m[1m^^^^^^^^^^^^^[0m
+  [90m12 |[0m ...quire_default(require([32m"@alloc...[0m
+  [90m13 |[0m ..._require_wildcard(require([32m"./...[0m
+  [90m14 |[0m ...[32mules"[0m);
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/lib/lib/expandTailwindAtRules.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/processTailwindFeatures.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/lib/lib/findAtConfigPath.js:11:52
+Module not found: Can't resolve 'fs'
+  [90m 9 |[0m ...
+  [90m10 |[0m ...
+[31m[1m>[0m [90m11 |[0m ...default(require([32m"fs"[0m));
+  [90m   |[0m            [31m[1m^^^^^^^^^^^^^[0m
+  [90m12 |[0m ...e_default(require([32m"path"[0m));
+  [90m13 |[0m ...
+  [90m14 |[0m ...
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/lib/lib/findAtConfigPath.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/lib/lib/getModuleDependencies.js:11:52
+Module not found: Can't resolve 'fs'
+  [90m 9 |[0m ...
+  [90m10 |[0m ...
+[31m[1m>[0m [90m11 |[0m ...default(require([32m"fs"[0m));
+  [90m   |[0m            [31m[1m^^^^^^^^^^^^^[0m
+  [90m12 |[0m ...e_default(require([32m"path"[0m));
+  [90m13 |[0m ...
+  [90m14 |[0m ...
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/lib/lib/getModuleDependencies.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/lib/lib/setupContextUtils.js:31:52
+Module not found: Can't resolve 'fs'
+  [90m29 |[0m ...
+  [90m30 |[0m ...
+[31m[1m>[0m [90m31 |[0m ...default(require([32m"fs"[0m));
+  [90m   |[0m            [31m[1m^^^^^^^^^^^^^[0m
+  [90m32 |[0m ..._default(require([32m"url"[0m));
+  [90m33 |[0m ...uire_default(require([32m"postcss.[0m..
+  [90m34 |[0m ..._default(require([32m"dlv"[0m));
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/lib/lib/setupContextUtils.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/processTailwindFeatures.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/lib/lib/setupTrackingContext.js:16:52
+Module not found: Can't resolve 'fs'
+  [90m14 |[0m ...
+  [90m15 |[0m ...
+[31m[1m>[0m [90m16 |[0m ...default(require([32m"fs"[0m));
+  [90m   |[0m            [31m[1m^^^^^^^^^^^^^[0m
+  [90m17 |[0m ...quire_default(require([32m"@alloc...[0m
+  [90m18 |[0m ...require_default(require([32m"../u...[0m
+  [90m19 |[0m ...op_require_default(require([32m"....[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/lib/util/resolveConfigPath.js:19:52
+Module not found: Can't resolve 'fs'
+  [90m17 |[0m ...
+  [90m18 |[0m ...
+[31m[1m>[0m [90m19 |[0m ...default(require([32m"fs"[0m));
+  [90m   |[0m            [31m[1m^^^^^^^^^^^^^[0m
+  [90m20 |[0m ...e_default(require([32m"path"[0m));
+  [90m21 |[0m ...
+  [90m22 |[0m ...
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/lib/util/resolveConfigPath.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/tailwindcss/node_modules/fast-glob/out/settings.js:4:12
+Module not found: Can't resolve 'fs'
+  [90m2 |[0m ...[33mject[0m.defineProperty(exports, [32m"...[0m
+  [90m3 |[0m ...ports.[33mDEFAULT_FILE_SYSTEM_ADAP...[0m
+[31m[1m>[0m [90m4 |[0m ...[36mnst[0m fs = require([32m"fs"[0m);
+  [90m  |[0m             [31m[1m^^^^^^^^^^^^^[0m
+  [90m5 |[0m ...[36mnst[0m os = require([32m"os"[0m);
+  [90m6 |[0m ...*
+  [90m7 |[0m ... [33mThe[0m [32m`os.cpus`[0m method can [36mretu..[0m.
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/tailwindcss/node_modules/fast-glob/out/settings.js [Client Component Browser]
+    ./node_modules/tailwindcss/node_modules/fast-glob/out/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/content.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/babel.js:1:110718
+Module not found: Can't resolve 'module'
+[31m[1m>[0m [90m1 |[0m ...xports=require([32m"module"[0m)},os:m...
+  [90m  |[0m           [31m[1m^^^^^^^^^^^^^^^^^[0m
+  [90m2 |[0m ...
+  [90m3 |[0m ...
+  [90m4 |[0m ...
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/babel.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/jiti.js:1:61118
+Module not found: Can't resolve 'module'
+[31m[1m>[0m [90m1 |[0m ...xports=require([32m"module"[0m)},path...
+  [90m  |[0m           [31m[1m^^^^^^^^^^^^^^^^^[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/jiti.js [Client Component Browser]
+    ./node_modules/jiti/lib/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/jiti.js:1:209874
+Module not found: Can't resolve 'module'
+[31m[1m>[0m [90m1 |[0m ...Object=require([32m"module"[0m),exter...
+  [90m  |[0m           [31m[1m^^^^^^^^^^^^^^^^^[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/jiti.js [Client Component Browser]
+    ./node_modules/jiti/lib/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/jiti.js:1:62357
+Module not found: Can't resolve 'perf_hooks'
+[31m[1m>[0m [90m1 |[0m ...ject=require([32m"perf_hooks"[0m),ext...
+  [90m  |[0m         [31m[1m^^^^^^^^^^^^^^^^^^^^^[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/jiti.js [Client Component Browser]
+    ./node_modules/jiti/lib/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/babel.js:1:111129
+Module not found: Can't resolve 'v8'
+[31m[1m>[0m [90m1 |[0m ....exports=require([32m"v8"[0m)},[32m"./nod...[0m
+  [90m  |[0m             [31m[1m^^^^^^^^^^^^^[0m
+  [90m2 |[0m ...
+  [90m3 |[0m ...
+  [90m4 |[0m ...
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/babel.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+./node_modules/jiti/dist/jiti.js:1:211244
+Module not found: Can't resolve 'v8'
+[31m[1m>[0m [90m1 |[0m ...ceObject=require([32m"v8"[0m),externa...
+  [90m  |[0m             [31m[1m^^^^^^^^^^^^^[0m
+
+
+
+Import trace:
+  Client Component Browser:
+    ./node_modules/jiti/dist/jiti.js [Client Component Browser]
+    ./node_modules/jiti/lib/index.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/load-config.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/lib/setupTrackingContext.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/plugin.js [Client Component Browser]
+    ./node_modules/tailwindcss/lib/index.js [Client Component Browser]
+    ./src/app/globals.css [Client Component Browser]
+    ./src/app/layout.tsx [Server Component]
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+    at <unknown> (./src/features/ai/components/Chat.tsx:3:1)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at ./node_modules/ (nodelib/fs.scandir/out/adapters/fs.js:4:12)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    at ./node_modules/ (nodelib/fs.stat/out/adapters/fs.js:4:12)
+    at <unknown> (https://nextjs.org/docs/messages/module-not-found)
+    ... collapsed 18 duplicate lines matching above 1 lines 18 times...
