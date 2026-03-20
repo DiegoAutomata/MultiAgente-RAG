@@ -1,19 +1,28 @@
-// @ts-nocheck
-import { streamText, tool } from 'ai';
+import { streamText, tool, UIMessage, convertToModelMessages } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { investigatorAgent } from '@/features/ai/services/rag-agents';
 
-export const maxDuration = 60; // Allow 60 seconds (since RAG takes time)
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
-  const { messages } = await req.json();
+  const body = await req.json();
+
+  // AI SDK v6: sendMessage sends { message, id } format
+  // We need to handle both old {messages} and new {message} formats
+  let messages: UIMessage[];
+  if (body.messages) {
+    messages = body.messages;
+  } else if (body.message) {
+    messages = [body.message];
+  } else {
+    return new Response('Invalid request body', { status: 400 });
+  }
 
   const result = streamText({
-    model: anthropic('claude-4-6-sonnet-latest'),
-    messages,
-    // @ts-ignore
-    maxSteps: 5, // Crucial for Multi-Agent loop over tools
+    model: anthropic('claude-3-5-sonnet-latest'),
+    messages: convertToModelMessages(messages),
+    maxSteps: 5,
     system: `You are the ultimate Corporate Multi-Agent RAG Orchestrator acting as a reliable, secure Redactor and Analyst. 
 Your objective is to answer the user's question truthfully, securely, and using ONLY data extracted from our vectorial database.
 
@@ -41,8 +50,6 @@ ROUTING LOGIC / WORKFLOW:
           data: z.array(z.object({ name: z.string(), value: z.number() })).describe("The array of data points to plot")
         }),
         execute: async (params) => {
-            // Generative UI: By returning params directly, useChat intercepts it as 'result' state 
-            // and we map it directly to our React Recharts component without stringifying.
             console.log("[Tool Call] -> generate_chart:", params.title);
             return params;
         }
@@ -50,6 +57,5 @@ ROUTING LOGIC / WORKFLOW:
     }
   });
 
-  // @ts-ignore
-  return result.toDataStreamResponse();
+  return result.toUIMessageStreamResponse();
 }

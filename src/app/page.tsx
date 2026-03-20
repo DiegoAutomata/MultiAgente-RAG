@@ -1,6 +1,5 @@
 import { Chat } from "@/features/ai/components/Chat";
 import { DocumentUpload } from "@/features/ai/components/DocumentUpload";
-import { AgentFlowVisualizer } from "@/features/ai/components/AgentFlowVisualizer";
 import { VectorDBInspector } from "@/features/ai/components/VectorDBInspector";
 
 export default function Home() {
@@ -45,11 +44,7 @@ export default function Home() {
             <VectorDBInspector />
           </div>
 
-          {/* Agent Flow Visualizer */}
-          <div className="mt-2">
-            <AgentFlowVisualizer />
           </div>
-        </div>
 
         {/* Right Column: Multi-Agent Interface */}
         <div className="col-span-1 lg:col-span-7 h-full flex items-end">
