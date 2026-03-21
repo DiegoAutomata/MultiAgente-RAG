@@ -63,3 +63,7 @@ Thumbs.db
 # Supabase
 supabase/.branches
 supabase/.temp
+
+# Python
+venv/
+__pycache__/

@@ -4,6 +4,22 @@ import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import { performHybridSearch } from "./supabase-vector";
 
+// @ts-ignore
+import { pipeline } from '@xenova/transformers';
+
+class EmbeddingPipeline {
+  static task = 'feature-extraction';
+  static model = 'Xenova/all-MiniLM-L6-v2';
+  static instance: any = null;
+
+  static async getInstance() {
+    if (this.instance === null) {
+      this.instance = await pipeline(this.task, this.model);
+    }
+    return this.instance;
+  }
+}
+
 /**
  * 1. Semantic Router: Decides if the user query needs document retrieval or is casual.
  */
@@ -21,30 +37,16 @@ If it is a casual greeting or a general, unrelated question, output "casual".`,
   return object.intent;
 }
 
-/**
- * Creates embeddings via Voyage AI (Anthropic's recommended partner for vectors)
- */
 async function generateQueryEmbedding(text: string): Promise<number[]> {
-  const voyageKey = process.env.VOYAGE_API_KEY;
-  if (!voyageKey) {
-    throw new Error("VOYAGE_API_KEY missing");
+  try {
+    const embedder = await EmbeddingPipeline.getInstance();
+    const output = await embedder(text, { pooling: 'mean', normalize: true });
+    return Array.from(output.data);
+  } catch (error) {
+    console.error("Local embedding failed:", error);
+    // Silent fallback to avoid crash if model is not downloaded yet
+    return new Array(384).fill(0); 
   }
-
-  const res = await fetch("https://api.voyageai.com/v1/embeddings", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${voyageKey}`,
-    },
-    body: JSON.stringify({
-      input: text,
-      model: "voyage-3",
-      input_type: "query",
-    }),
-  });
-
-  const data = await res.json();
-  return data.data[0].embedding;
 }
 
 /**

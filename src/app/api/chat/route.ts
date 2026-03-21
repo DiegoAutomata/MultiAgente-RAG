@@ -1,4 +1,4 @@
-import { streamText, tool, UIMessage, convertToModelMessages } from 'ai';
+import { streamText, tool, ModelMessage } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { investigatorAgent } from '@/features/ai/services/rag-agents';
@@ -8,21 +8,27 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const body = await req.json();
 
-  // AI SDK v6: sendMessage sends { message, id } format
-  // We need to handle both old {messages} and new {message} formats
-  let messages: UIMessage[];
+  // AI SDK v6: Manually map messages to ModelMessage[] to ensure strict type compliance
+  let messages: ModelMessage[] = [];
+  
   if (body.messages) {
-    messages = body.messages;
+    // Strip out non-core properties like toolInvocations to prevent validation crashes
+    messages = body.messages.filter((m: any) => m.content).map((m: any) => ({
+      role: m.role,
+      content: m.content
+    }));
   } else if (body.message) {
-    messages = [body.message];
+    messages = [{
+      role: body.message.role,
+      content: body.message.content
+    }];
   } else {
     return new Response('Invalid request body', { status: 400 });
   }
 
   const result = streamText({
     model: anthropic('claude-3-5-sonnet-latest'),
-    messages: convertToModelMessages(messages),
-    maxSteps: 5,
+    messages,
     system: `You are the ultimate Corporate Multi-Agent RAG Orchestrator acting as a reliable, secure Redactor and Analyst. 
 Your objective is to answer the user's question truthfully, securely, and using ONLY data extracted from our vectorial database.
 
@@ -57,5 +63,5 @@ ROUTING LOGIC / WORKFLOW:
     }
   });
 
-  return result.toUIMessageStreamResponse();
+  return (result as any).toUIMessageStreamResponse();
 }

@@ -20,8 +20,8 @@ export async function POST(req: Request) {
     }
 
     if (!userId) {
-       // Fallback dummy user for demo mode
-       userId = '00000000-0000-0000-0000-000000000000';
+       // Fallback dummy user for demo mode (Valid Supabase user)
+       userId = '60f831a2-d501-4405-9600-915709179c79';
     }
 
     const buffer = Buffer.from(await file.arrayBuffer());

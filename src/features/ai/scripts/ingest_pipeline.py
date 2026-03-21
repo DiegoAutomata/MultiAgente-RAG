@@ -115,6 +115,7 @@ async def ingest_document(user_id: str, file_path: str, title: str):
     
     # 1. Parsing
     parsed_text = await parse_pdf(file_path)
+    parsed_text = parsed_text.replace("\x00", "")
     
     # 2. Chunking
     chunks = chunk_text(parsed_text)
@@ -137,8 +138,17 @@ async def ingest_document(user_id: str, file_path: str, title: str):
     
     # 4. Processing Chunks (Embedding & Storage)
     voyage_client = get_voyage_client()
+    local_embedder = None
     
-    print("🧠 Generating embeddings and enriching via Anthropic Agent SDK...")
+    if not voyage_client:
+        try:
+            from sentence_transformers import SentenceTransformer
+            print("🚀 Loading local embedding model (all-MiniLM-L6-v2) for free production-ready vectors...")
+            local_embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        except ImportError:
+            print("⚠️ sentence-transformers not installed. Skipping vector generation.")
+    
+    print("🧠 Generating embeddings and enriching...")
     
     # We instantiate the Anthropic SDK to refine chunks optimally
     # Required: ANTHROPIC_API_KEY in .env
@@ -157,6 +167,9 @@ async def ingest_document(user_id: str, file_path: str, title: str):
                 # Voyage AI recommends voyage-3 for general text
                 result = voyage_client.embed(texts=[final_chunk], model="voyage-3", input_type="document")
                 embedding_vec = result.embeddings[0]
+            elif local_embedder:
+                # Use MiniLM 384-dim open-source vector
+                embedding_vec = local_embedder.encode([final_chunk])[0].tolist()
 
             # In pgvector / Supabase, we insert list of floats directly into vector column
             chunk_data = {

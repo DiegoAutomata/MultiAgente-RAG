@@ -19,7 +19,7 @@ CREATE TABLE document_chunks (
   document_id UUID REFERENCES documents(id) ON DELETE CASCADE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   content TEXT NOT NULL,
-  embedding vector(1024),
+  embedding vector(384),
   chunk_index INTEGER NOT NULL,
   -- fts (Full Text Search) column for BM25 hybrid search
   fts tsvector GENERATED ALWAYS AS (to_tsvector('spanish', content)) STORED,
@@ -65,7 +65,7 @@ CREATE INDEX document_chunks_fts_idx ON document_chunks USING GIN (fts);
 -- 7. Función RPC para Hybrid Search (Coseno + BM25) usando RRF (Reciprocal Rank Fusion)
 CREATE OR REPLACE FUNCTION match_document_chunks_hybrid(
   query_text TEXT,
-  query_embedding vector(1024),
+  query_embedding vector(384),
   match_count INT DEFAULT 10,
   full_text_weight FLOAT DEFAULT 1.0,
   semantic_weight FLOAT DEFAULT 1.0,
