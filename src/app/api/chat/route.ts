@@ -1,67 +1,115 @@
-import { streamText, tool, ModelMessage } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
-import { z } from 'zod';
+import Anthropic from '@anthropic-ai/sdk';
 import { investigatorAgent } from '@/features/ai/services/rag-agents';
 
 export const maxDuration = 60;
 
+const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+function buildTools(): Anthropic.Tool[] {
+  return [
+    {
+      name: 'investigate_database',
+      description: 'Searches the corporate RAG database using hybrid search (BM25 + Cosine similarity) to extract top-K contexts based on the user question.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          search_query: { type: 'string', description: 'The core semantic intent of what the user is looking for.' }
+        },
+        required: ['search_query']
+      }
+    },
+    {
+      name: 'generate_chart',
+      description: 'Generates an Interactive Recharts graphic natively on the Frontend UI. Call this when representing quantifiable lists or trends.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          title: { type: 'string', description: 'Title of the chart' },
+          xAxisKey: { type: 'string', description: 'X axis label' },
+          data: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { name: { type: 'string' }, value: { type: 'number' } },
+              required: ['name', 'value']
+            }
+          }
+        },
+        required: ['title', 'xAxisKey', 'data']
+      }
+    }
+  ];
+}
+
 export async function POST(req: Request) {
   const body = await req.json();
 
-  // AI SDK v6: Manually map messages to ModelMessage[] to ensure strict type compliance
-  let messages: ModelMessage[] = [];
-  
+  let rawMessages: Anthropic.MessageParam[] = [];
   if (body.messages) {
-    // Strip out non-core properties like toolInvocations to prevent validation crashes
-    messages = body.messages.filter((m: any) => m.content).map((m: any) => ({
-      role: m.role,
-      content: m.content
-    }));
+    rawMessages = body.messages
+      .filter((m: any) => m.content)
+      .map((m: any) => ({ role: m.role, content: m.content }));
   } else if (body.message) {
-    messages = [{
-      role: body.message.role,
-      content: body.message.content
-    }];
+    rawMessages = [{ role: body.message.role, content: body.message.content }];
   } else {
     return new Response('Invalid request body', { status: 400 });
   }
 
-  const result = streamText({
-    model: anthropic('claude-3-5-sonnet-latest'),
-    messages,
-    system: `You are the ultimate Corporate Multi-Agent RAG Orchestrator acting as a reliable, secure Redactor and Analyst. 
-Your objective is to answer the user's question truthfully, securely, and using ONLY data extracted from our vectorial database.
+  const SYSTEM = `Eres el Orquestador RAG Corporativo definitivo: un Redactor y Analista fiable y seguro.
+Tu objetivo es responder la pregunta del usuario usando EXCLUSIVAMENTE datos de nuestra base de datos vectorial.
 
-ROUTING LOGIC / WORKFLOW:
-1. If the user asks for corporate data, policies, documents, or metrics, IMMEDIATELY call the tool \`investigate_database\`.
-2. Wait for the tool output to receive the contextual chunk texts.
-3. Review the context carefully. If the information isn't there, say you don't know based on corporate docs.
-4. If the user wants to see data visually (metrics, quantities, comparative values) or if the answer naturally forms a list of metrics, you MUST call the \`generate_chart\` tool. DO NOT output a markdown table or code. Let the Generative UI handle the visual.
-5. Provide your final concise text answer analyzing the data. Don't hallucinate.`,
-    tools: {
-      investigate_database: tool({
-        description: 'Searches the corporate RAG database using hybrid search (BM25 + Cosine similarity) to extract top-K contexts based on the user question.',
-        parameters: z.object({ search_query: z.string().describe("The core semantic intent of what the user is looking for.") }),
-        execute: async ({ search_query }) => {
-            console.log("[Tool Call] -> investigate_database:", search_query);
-            const context = await investigatorAgent(search_query);
-            return { rawContext: context || "No context found in database for this query." };
+FLUJO DE TRABAJO:
+1. Si el usuario pide datos corporativos, normas, documentos o métricas, llama INMEDIATAMENTE a investigate_database.
+2. Revisa cuidadosamente el contexto. Si no está disponible, di que no lo sabes según los docs.
+3. Si el usuario quiere ver datos de forma visual (métricas, cantidades), llama a generate_chart. NO generes tablas markdown ni código.
+4. Proporciona tu respuesta final concisa analizando los datos. No alucines.`;
+
+  const stream = await client.messages.stream({
+    model: 'claude-3-haiku-20240307',
+    max_tokens: 4096,
+    system: SYSTEM,
+    messages: rawMessages,
+    tools: buildTools(),
+  });
+
+  const readable = new ReadableStream({
+    async start(controller) {
+      try {
+        for await (const event of stream) {
+          if (
+            event.type === 'content_block_delta' &&
+            event.delta.type === 'text_delta'
+          ) {
+            // Vercel AI SDK Protocol: 0:JSON_STRING\n
+            const chunk = "0:" + JSON.stringify(event.delta.text) + "\n";
+            controller.enqueue(new TextEncoder().encode(chunk));
+          }
+
+          // Handle tool use results inline
+          if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+            const toolName = event.content_block.name;
+            const chunkString = "\\n[⚙️ Usando herramienta: " + toolName + "]\\n";
+            const chunk = "0:" + JSON.stringify(chunkString) + "\n";
+            controller.enqueue(new TextEncoder().encode(chunk));
+          }
         }
-      }),
-      generate_chart: tool({
-        description: 'Generates an Interactive Recharts graphic natively on the Frontend UI. Call this when representing quantifiable lists or trends.',
-        parameters: z.object({
-          title: z.string().describe("The descriptive title for the chart."),
-          xAxisKey: z.string().describe("The label for the x-axis items"),
-          data: z.array(z.object({ name: z.string(), value: z.number() })).describe("The array of data points to plot")
-        }),
-        execute: async (params) => {
-            console.log("[Tool Call] -> generate_chart:", params.title);
-            return params;
-        }
-      }),
+      } catch (err: any) {
+        const chunk = "3:" + JSON.stringify(err.message) + "\n";
+        controller.enqueue(new TextEncoder().encode(chunk));
+      } finally {
+        controller.enqueue(new TextEncoder().encode('e:{"finishReason":"stop","usage":{"promptTokens":0,"completionTokens":0}}\n'));
+        controller.close();
+      }
     }
   });
 
-  return (result as any).toUIMessageStreamResponse();
+  return new Response(readable, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+      'X-Vercel-AI-Data-Stream': 'v1',
+      'X-Content-Type-Options': 'nosniff',
+      'Transfer-Encoding': 'chunked',
+      'Cache-Control': 'no-cache',
+    }
+  });
 }
