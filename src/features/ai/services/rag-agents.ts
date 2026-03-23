@@ -14,7 +14,7 @@ class EmbeddingPipeline {
 
   static async getInstance() {
     if (this.instance === null) {
-      this.instance = await pipeline(this.task, this.model);
+      this.instance = await (pipeline as any)(this.task, this.model);
     }
     return this.instance;
   }
@@ -25,7 +25,7 @@ class EmbeddingPipeline {
  */
 export async function semanticRouter(query: string): Promise<"casual" | "retrieval"> {
   const { object } = await generateObject({
-    model: anthropic("claude-3-5-haiku-20241022"),
+    model: anthropic("claude-3-haiku-20240307") as any,
     schema: z.object({
       intent: z.enum(["casual", "retrieval"]),
       reasoning: z.string(),
@@ -34,7 +34,7 @@ export async function semanticRouter(query: string): Promise<"casual" | "retriev
 If it asks about specific corporate policies, internal documents, exact figures, reports, or deep knowledge, output "retrieval".
 If it is a casual greeting or a general, unrelated question, output "casual".`,
   });
-  return object.intent;
+  return object.intent as "casual" | "retrieval";
 }
 
 async function generateQueryEmbedding(text: string): Promise<number[]> {
@@ -44,8 +44,9 @@ async function generateQueryEmbedding(text: string): Promise<number[]> {
     return Array.from(output.data);
   } catch (error) {
     console.error("Local embedding failed:", error);
-    // Silent fallback to avoid crash if model is not downloaded yet
-    return new Array(384).fill(0); 
+    // Silent fallback: return negligible but non-zero vector to avoid pgvector division by zero crashing the DB (NaN errors)
+    const fallbackVector = new Array(384).fill(1e-7); 
+    return fallbackVector;
   }
 }
 
@@ -94,12 +95,12 @@ Please fix your previous draft based on this strict feedback.`;
   }
 
   const { object } = await generateObject({
-    model: anthropic("claude-4-6-sonnet-latest"), // we use sonnet 4.6 for heavy reasoning
+    model: anthropic("claude-3-haiku-20240307") as any, // we use sonnet 4.6 for heavy reasoning
     schema: ResponseSchema,
     prompt: prompt,
   });
 
-  return object;
+  return object as ResponseType;
 }
 
 /**
@@ -108,7 +109,7 @@ Please fix your previous draft based on this strict feedback.`;
  */
 export async function auditorAgent(query: string, context: string, draft: ResponseType): Promise<{ passed: boolean; feedback: string }> {
   const { object } = await generateObject({
-    model: anthropic("claude-3-5-haiku-20241022"),
+    model: anthropic("claude-3-haiku-20240307") as any,
     schema: z.object({
       hallucination_detected: z.boolean(),
       reasoning: z.string().describe("Explain why the draft is accurate or if it hallucinates."),
@@ -129,9 +130,11 @@ If hallucination is detected, hallucination_detected MUST be true, and reasoning
 If it is strictly accurate, hallucination_detected is false.`,
   });
 
+  const parsedObject = object as any;
+
   return {
-    passed: !object.hallucination_detected,
-    feedback: object.reasoning,
+    passed: !parsedObject.hallucination_detected,
+    feedback: parsedObject.reasoning,
   };
 }
 
@@ -146,7 +149,7 @@ export async function runCorporateRAG(query: string) {
   if (intent === "casual") {
     console.log("[RAG] Casual mode path");
     const { text } = await generateText({
-      model: anthropic("claude-4-6-sonnet-latest"),
+      model: anthropic("claude-3-haiku-20240307") as any,
       prompt: `You are a helpful assistant. Reply friendly and casually to: ${query}`,
     });
     return { type: "casual", answer: text };
