@@ -34,7 +34,7 @@ export async function POST(req: Request) {
     // Resolve project root so the script path is always correct regardless of CWD
     const projectRoot = path.resolve(process.cwd());
     const scriptPath = join(projectRoot, 'src/features/ai/scripts/ingest_pipeline.py');
-    const pythonBin = join(projectRoot, 'venv/bin/python');
+    const pythonBin = process.env.PYTHON_BIN || '/home/diego/.venvs/saas-rag/bin/python';
 
     // Spawn detached so it survives beyond the HTTP response
     const child = spawn(pythonBin, [scriptPath, userId, tempPath], {
