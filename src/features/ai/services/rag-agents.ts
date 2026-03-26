@@ -38,33 +38,53 @@ If it is a casual greeting or a general, unrelated question, output "casual".`,
 }
 
 async function generateQueryEmbedding(text: string): Promise<number[]> {
+  // Guard against null/undefined/empty text that crashes the embedder
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    console.warn("[embedding] Empty or invalid text provided, returning fallback vector");
+    return new Array(384).fill(1e-7);
+  }
+  
   try {
     const embedder = await EmbeddingPipeline.getInstance();
     const output = await embedder(text, { pooling: 'mean', normalize: true });
     return Array.from(output.data);
   } catch (error) {
     console.error("Local embedding failed:", error);
-    // Silent fallback: return negligible but non-zero vector to avoid pgvector division by zero crashing the DB (NaN errors)
     const fallbackVector = new Array(384).fill(1e-7); 
     return fallbackVector;
   }
 }
 
 /**
- * 2. Investigator Agent: Retrieves context and reranks it (simulated reranking for now, taking top-3).
+ * 2. Investigator Agent: Retrieves context and reranks it
  */
 export async function investigatorAgent(query: string): Promise<string> {
-  const queryEmbedding = await generateQueryEmbedding(query);
-  // Perform Hybrid Search (BM25 + Cosine similarity via RRF)
-  const results = await performHybridSearch(query, queryEmbedding, 15);
+  const start = Date.now();
+  console.log(`[investigator] Starting retrieval for: "${query}"`);
+  
+  try {
+    const queryEmbedding = await generateQueryEmbedding(query);
+    // Perform Hybrid Search (BM25 + Cosine similarity via RRF)
+    const results = await performHybridSearch(query, queryEmbedding, 15);
 
-  if (results.length === 0) {
-    return "";
+    const duration = Date.now() - start;
+    console.log(`[investigator] Found ${results.length} results in ${duration}ms`);
+
+    if (results.length === 0) {
+      return "No se encontraron fragmentos relevantes en la base de datos para esta consulta.";
+    }
+
+    // Reranking step (Taking top 15 chunks)
+    const topContexts = results
+      .slice(0, 15)
+      .map((r, i) => `[Doc ${i + 1}]:\n${r.content}`)
+      .join("\n\n---\n\n");
+      
+    return topContexts;
+  } catch (error) {
+    console.error("[investigator] Error during retrieval:", error);
+    return "Ocurrió un error al intentar consultar la base de datos de documentos.";
   }
-
-  // Reranking step (In a real scenario, use Voyage Reranker endpoint, but here we just take the top 5 highly confident results)
-  const topContexts = results.slice(0, 5).map((r, i) => `[Doc ${i + 1}]:\n${r.content}`).join("\n\n---\n\n");
-  return topContexts;
 }
 
 /**

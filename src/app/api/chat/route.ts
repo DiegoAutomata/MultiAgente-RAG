@@ -24,40 +24,81 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: 'No messages provided' }), { status: 400 });
   }
 
-  // Convert UIMessage[] → ModelMessage[] (required by streamText in SDK v6)
-  // UIMessage has toolInvocations (frontend format); streamText needs ModelMessage format.
+  // Convert UI messages to model messages for the AI SDK
   const modelMessages = await convertToModelMessages(messages);
 
-  const SYSTEM = `Eres el Orquestador RAG Corporativo definitivo: un Redactor y Analista corporativo fiable y seguro.
-Tu objetivo es responder la pregunta del usuario usando datos de nuestra base de datos vectorial cuando sea necesario o solicitado.
+  const SYSTEM = `Eres el Orquestador RAG Corporativo definitivo. Eres un analista experto, amable y profesional.
 
-FLUJO DE TRABAJO:
-1. Si el usuario pide datos corporativos, normas, información, documentos o métricas, llama a investigate_database.
-2. Revisa cuidadosamente el contexto devuelto. Si no está disponible, di que no lo sabes según los docs.
-3. Si el usuario quiere ver datos de forma visual (métricas, cantidades, o reportes financieros), llama a generate_chart con los datos exactos que obtuviste de la base de datos.
-4. Proporciona tu respuesta resolviendo la duda del usuario usando EXCLUSIVAMENTE el contexto y las herramientas. No alucines información fuera de tus herramientas.`;
+REGLAS DE INTERACCIÓN:
+1. CHARLA CASUAL: Si el usuario te saluda, te pregunta cómo estás, o hace preguntas de cultura general, responde amigablemente SIN usar herramientas.
+2. PREGUNTAS SOBRE DOCUMENTOS: 
+    - Si el usuario pregunta qué documentos hay o cómo se llama el que subió, usa 'list_documents'.
+    - Si pregunta por el contenido o datos específicos, usa 'investigate_database'.
+3. NO ALUCINES: Si los documentos no tienen la respuesta, dilo claramente.
+4. ESTADO DE CARGA: Si ves un documento en 'list_documents' pero 'investigate_database' no devuelve nada, advierte al usuario que el documento se está indexando aún.
+5. RESPUESTA FINAL: SIEMPRE debes proporcionar una respuesta final en texto después de usar una herramienta. NUNCA termines una respuesta con solo el resultado de una herramienta.
+
+FLUJO: Saludo -> Lista Documentos -> Búsqueda de Contenido -> Respuesta Analítica Final.`;
 
   const result = streamText({
     model: anthropic('claude-3-haiku-20240307') as any,
     system: SYSTEM,
-    messages: modelMessages as any,
+    messages: modelMessages,
     maxSteps: 5,
     tools: {
       investigate_database: tool({
-        description: 'Searches the corporate RAG database using hybrid search (BM25 + Cosine similarity) to extract top-K contexts based on the user question.',
+        description: 'Searches the RAG vector database for document content. ONLY use this when the user asks for information from PDF documents or reports. Do NOT use it for greetings or routine conversation.',
         parameters: z.object({
-          search_query: z.string().describe('The core semantic intent of what the user is looking for. Keep it concise.')
+          search_query: z.string().describe('Precise keyword/intent query for vector search.')
         }),
-        execute: async ({ search_query }: { search_query: string }) => {
-          const context = await investigatorAgent(search_query);
+        execute: async (args: Record<string, unknown>) => {
+          // Defensive: extract search_query from any possible shape
+          const rawQuery = (args as any)?.search_query ?? (args as any)?.query ?? '';
+          const query = typeof rawQuery === 'string' ? rawQuery.trim() : '';
+          console.log('[chat] investigate_database called with query:', JSON.stringify(query));
+          
+          if (!query) {
+            // Fallback: use last user message text as query
+            const lastUserMsg = messages.filter(m => m.role === 'user').pop();
+            const fallbackQuery = lastUserMsg?.parts
+              ?.filter((p: any) => p.type === 'text')
+              .map((p: any) => p.text)
+              .join(' ') || 'documento';
+            console.log('[chat] Using fallback query from last user message:', fallbackQuery);
+            const context = await investigatorAgent(fallbackQuery);
+            return { status: 'success', context: context || 'No se encontró información relevante.' };
+          }
+          
+          const context = await investigatorAgent(query);
           return {
             status: 'success',
-            context: context || 'No context found in corporate documents.'
+            context: context || 'No se encontró información relevante en los documentos.'
+          };
+        }
+      } as any),
+      list_documents: tool({
+        description: 'Checks the database for metadata of uploaded files (name, upload date). Call this when the user asks which document they provided.',
+        parameters: z.object({}),
+        execute: async () => {
+          console.log('[chat] list_documents called');
+          const { performHybridSearch } = await import('@/features/ai/services/supabase-vector');
+          // We can't use performHybridSearch directly since it's for chunks. 
+          // We need a simple query to documents table.
+          const { createClient } = await import('@supabase/supabase-js');
+          const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+          const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          const supabase = createClient(url!, serviceKey!);
+          const { data, error } = await supabase.from('documents').select('title, created_at').order('created_at', { ascending: false }).limit(5);
+          
+          if (error) return { error: error.message };
+          return {
+             status: 'success',
+             documents: data || []
           };
         }
       } as any),
       generate_chart: tool({
-        description: 'Generates an Interactive Recharts graphic natively on the Frontend UI. Call this when representing quantifiable lists or trends.',
+        description: 'Generates an Interactive Recharts graphic. Call this ONLY when representing trends, percentages or quantifiable data from retrieved documents.',
         parameters: z.object({
           title: z.string().describe('Title of the chart'),
           xAxisKey: z.string().describe('X axis label'),

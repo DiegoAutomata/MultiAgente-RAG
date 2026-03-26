@@ -88,8 +88,8 @@ export function Chat() {
              <div className="w-16 h-16 bg-teal-500/10 rounded-2xl flex items-center justify-center border border-teal-500/20 mb-6 backdrop-blur-md shadow-[0_0_30px_rgba(20,184,166,0.15)]">
                  <Bot size={32} className="text-teal-400" />
              </div>
-             <h2 className="text-2xl font-bold text-white mb-2 tracking-tight">Enterprise RAG Auditor</h2>
-             <p className="text-zinc-400 max-w-sm text-sm">Auditoría inteligente sobre repositorio B2B. Escribe tu primera consulta abajo para iniciar.</p>
+             <h2 className="text-2xl font-bold text-white mb-2 tracking-tight" suppressHydrationWarning>Enterprise RAG Auditor</h2>
+             <p className="text-zinc-400 max-w-sm text-sm" suppressHydrationWarning>Auditoría inteligente sobre repositorio B2B. Escribe tu primera consulta abajo para iniciar.</p>
           </div>
         )}
 
@@ -128,6 +128,7 @@ export function Chat() {
                       // 1. Thought Process Animation (While executing)
                       let label = "Analizando sistema...";
                       if (toolName === 'investigate_database') label = "🔍 Investigador consultando la base vectorial corporativa...";
+                      if (toolName === 'list_documents') label = "📂 Consultando archivo de documentos corporativos...";
                       if (toolName === 'generate_chart') label = "📊 Generando UI Analítica interactiva...";
                       if (toolName === 'audit_content') label = "👮‍♂️ Auditor verificando veracidad de citas...";
 

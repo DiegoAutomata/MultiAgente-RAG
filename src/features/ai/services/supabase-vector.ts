@@ -23,12 +23,13 @@ function createAdminClient() {
 }
 
 /**
- * Executes a semantic similarity search against document_chunks directly.
- * Uses the service_role key to bypass RLS (the chat route has no user session).
- *
- * NOTE: The RPC function match_document_chunks_hybrid filters by auth.uid()
- * which is NULL when called via service_role — so we query the table directly
- * for semantic relevance by fetching content and doing simple text matching.
+ * Performs a hybrid search against document_chunks.
+ * Uses the service_role key to bypass RLS.
+ * 
+ * Strategy:
+ * 1. Try RPC function (if it exists and works)
+ * 2. Fallback: Direct table query with text matching (ilike)
+ * 3. Last resort: Fetch all chunks ordered by index
  */
 export async function performHybridSearch(
   queryText: string,
@@ -37,7 +38,7 @@ export async function performHybridSearch(
 ) {
   const supabase = createAdminClient();
 
-  // Step 1: Try the RPC first with the service role (no user filter)
+  // Strategy 1: Try the RPC function
   try {
     const { data, error } = await supabase.rpc("match_document_chunks_hybrid", {
       query_text: queryText,
@@ -59,45 +60,73 @@ export async function performHybridSearch(
     }
 
     if (error) {
-      console.warn("[search] RPC error, falling back to direct query:", error.message);
+      console.warn("[search] RPC failed:", error.message);
     } else {
-      console.warn("[search] RPC returned 0 results, falling back to direct query");
+      console.warn("[search] RPC returned 0 results, trying direct search");
     }
   } catch (rpcErr) {
-    console.warn("[search] RPC threw exception, falling back:", rpcErr);
+    console.warn("[search] RPC threw exception:", rpcErr);
   }
 
-  // Step 2: Fallback — direct full-text search on document_chunks
-  // This bypasses the auth.uid() filter entirely since we use service_role
-  const { data: fallbackData, error: fallbackError } = await supabase
-    .from("document_chunks")
-    .select("id, document_id, content")
-    .textSearch("fts", queryText, { config: "spanish" })
-    .limit(matchCount);
+  // Strategy 2: Direct text search using ilike (works regardless of FTS config)
+  // Build search terms from the query, ignoring common stop words
+  const searchTerms = queryText
+    .toLowerCase()
+    .replace(/[¿?¡!]/g, '')
+    .split(/\s+/)
+    .filter(t => t.length > 3) // Only useful keywords
+    .slice(0, 8); 
 
-  if (fallbackError) {
-    console.error("[search] Fallback full-text search error:", JSON.stringify(fallbackError, null, 2));
+  console.log("[search] Falling back to direct search with terms:", searchTerms);
 
-    // Step 3: Last resort — return ALL chunks (for small datasets in demo mode)
-    console.warn("[search] Fetching all chunks as last resort...");
-    const { data: allData, error: allError } = await supabase
+  const matchedChunks: Map<string, any> = new Map();
+
+  for (const term of searchTerms) {
+    const { data: matchData } = await supabase
       .from("document_chunks")
       .select("id, document_id, content")
-      .limit(matchCount);
+      .ilike("content", `%${term}%`)
+      .limit(5);
 
-    if (allError) {
-      throw new Error(`Vector search failed: ${allError.message}`);
+    if (matchData) {
+      matchData.forEach(row => {
+        if (!matchedChunks.has(row.id)) {
+          matchedChunks.set(row.id, { ...row, score: 1 });
+        } else {
+          matchedChunks.get(row.id).score += 1;
+        }
+      });
     }
+  }
 
-    return (allData ?? []).map((row, i) => ({
-      ...row,
-      similarity: 1.0 / (i + 1),
+  if (matchedChunks.size > 0) {
+    const results = Array.from(matchedChunks.values())
+      .sort((a, b) => b.score - a.score)
+      .slice(0, matchCount);
+    
+    console.log(`[search] Direct search aggregated ${results.length} results`);
+    return results.map((r, i) => ({
+      ...r,
+      similarity: 0.9 / (i + 1), // Standard similarity score for fallback
     }));
   }
 
-  console.log(`[search] Fallback returned ${fallbackData?.length ?? 0} results`);
-  return (fallbackData ?? []).map((row, i) => ({
+  // Strategy 3: Last resort — return recent chunks (for small datasets in demo mode)
+  console.warn("[search] No keyword matches. Fetching recent chunks as fallback...");
+  const { data: allData, error: allError } = await supabase
+    .from("document_chunks")
+    .select("id, document_id, content")
+    .order("chunk_index", { ascending: true })
+    .limit(matchCount);
+
+  if (allError) {
+    console.error("[search] All search strategies failed:", allError.message);
+    return [];
+  }
+
+  console.log(`[search] Fallback returned ${allData?.length ?? 0} chunks`);
+  return (allData ?? []).map((row, i) => ({
     ...row,
-    similarity: 1.0 / (i + 1), // Simulate ranked similarity for the fallback
+    similarity: 1.0 / (i + 1),
   }));
 }
