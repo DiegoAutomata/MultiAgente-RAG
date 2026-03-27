@@ -3,8 +3,8 @@ import './globals.css'
 import { Analytics } from '@vercel/analytics/react'
 
 export const metadata: Metadata = {
-  title: 'SaaS Factory App | Enterprise RAG',
-  description: 'Built with SaaS Factory V4',
+  title: 'Multiagente RAG',
+  description: 'Enterprise Multi-Agent RAG Orchestration System',
 }
 
 export default function RootLayout({
@@ -14,6 +14,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="icon" href="/icon.png" type="image/png" />
+      </head>
       <body>
         {children}
         <Analytics />
