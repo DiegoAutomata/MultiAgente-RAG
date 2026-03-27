@@ -9,35 +9,43 @@ import { useRagStore } from "../store/rag-store";
 import { useEffect, useRef, useState } from "react";
 
 export function Chat() {
-  const { messages, isLoading, error, sendMessage, status } = useChat({
+  // AI SDK v6: isLoading no existe, usar status en su lugar
+  const { messages, error, sendMessage, status } = useChat({
     api: "/api/chat",
-    maxSteps: 5,
   });
   const [input, setInput] = useState("");
 
   const setActiveAgent = useRagStore(s => s.setActiveAgent);
-  const previousLoading = useRef(isLoading);
+  const isLoading = status === "streaming" || status === "submitted";
+  const previousLoading = useRef(false);
+
+  // Auto-scroll al último mensaje cuando cambia el estado
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const loading = status === "streaming" || status === "submitted";
-    if (!loading) {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, status]);
+
+  // Actualizar agente activo en el visualizador
+  useEffect(() => {
+    if (!isLoading) {
       if (previousLoading.current) {
         setActiveAgent('auditor');
         setTimeout(() => setActiveAgent('idle'), 1500);
       } else {
         setActiveAgent('idle');
       }
-      previousLoading.current = loading;
+      previousLoading.current = false;
       return;
     }
 
-    previousLoading.current = loading;
+    previousLoading.current = true;
     const lastMsg = messages[messages.length - 1];
 
     if (lastMsg?.role === 'user' || !lastMsg) {
       setActiveAgent('semantic-router');
     } else {
-      // Check parts for tool calls in progress
       const hasActiveTool = lastMsg?.parts?.some(
         (p: any) => p.type?.startsWith('tool-') && (p.state === 'input-streaming' || p.state === 'input-available')
       );
@@ -51,38 +59,39 @@ export function Chat() {
         setActiveAgent('redactor');
       }
     }
-  }, [messages, status, setActiveAgent]);
+  }, [messages, isLoading, setActiveAgent]);
 
   /**
-   * Get the text content from a message's parts (SDK v6 format).
-   * Falls back to m.content for backward compatibility.
+   * Extrae el texto de un mensaje (SDK v6: m.parts con type 'text').
+   * En multi-step, concatena los textos de todos los steps.
    */
   function getTextContent(m: any): string {
     if (m.parts?.length) {
       return m.parts
         .filter((p: any) => p.type === 'text')
-        .map((p: any) => p.text)
+        .map((p: any) => p.text ?? '')
         .join('');
     }
-    // fallback for older format
     return typeof m.content === 'string' ? m.content : '';
   }
 
   /**
-   * Get tool-related parts from a message (SDK v6 uses m.parts with type 'tool-*').
-   * Also handles legacy toolInvocations for backward compat.
+   * Extrae las partes de tool calls de un mensaje.
+   * SDK v6: type 'tool-invocation', estado 'input-available' | 'output-available'
    */
   function getToolParts(m: any): any[] {
     if (m.parts?.length) {
       return m.parts.filter((p: any) => p.type?.startsWith('tool-'));
     }
-    // Legacy fallback
     return m.toolInvocations ?? [];
   }
 
   return (
     <div className="flex flex-col w-full max-w-4xl mx-auto h-[80vh] bg-zinc-950 text-white rounded-3xl shadow-2xl border border-zinc-900 shadow-teal-900/10 overflow-hidden relative">
-      <div className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent">
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
+      >
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center mt-4">
              <div className="w-16 h-16 bg-teal-500/10 rounded-2xl flex items-center justify-center border border-teal-500/20 mb-6 backdrop-blur-md shadow-[0_0_30px_rgba(20,184,166,0.15)]">
@@ -106,31 +115,27 @@ export function Chat() {
               )}
               <div className={`flex flex-col gap-3 min-w-[50%] max-w-[85%] ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
 
-                {/* Message text */}
+                {/* Texto del mensaje */}
                 {textContent && (
                   <div className={`p-4 rounded-2xl text-[15px] ${m.role === 'user' ? 'bg-zinc-800 text-zinc-100 rounded-tr-sm' : 'bg-transparent text-zinc-300'}`}>
                     <p className="whitespace-pre-wrap leading-relaxed">{textContent}</p>
                   </div>
                 )}
 
-                {/* Tool Parts (Thought Process and Generative UI) */}
+                {/* Tool Parts: animaciones de proceso y UI generativa */}
                 <AnimatePresence>
                   {toolParts.map((toolPart: any) => {
-                    // SDK v6: parts have type like 'tool-invocation', state 'input-streaming'|'input-available'|'output-available'
-                    // Legacy v4: toolInvocations have state 'call'|'result'
-                    const toolName = toolPart.toolName ?? toolPart.toolName;
+                    const toolName = toolPart.toolName;
                     const toolCallId = toolPart.toolCallId;
                     const isInProgress = toolPart.state === 'call' || toolPart.state === 'input-streaming' || toolPart.state === 'input-available';
                     const hasResult = toolPart.state === 'result' || toolPart.state === 'output-available';
-                    const result = toolPart.result ?? toolPart.output;
+                    const result = toolPart.output ?? toolPart.result;
 
                     if (isInProgress) {
-                      // 1. Thought Process Animation (While executing)
                       let label = "Analizando sistema...";
                       if (toolName === 'investigate_database') label = "🔍 Investigador consultando la base vectorial corporativa...";
                       if (toolName === 'list_documents') label = "📂 Consultando archivo de documentos corporativos...";
                       if (toolName === 'generate_chart') label = "📊 Generando UI Analítica interactiva...";
-                      if (toolName === 'audit_content') label = "👮‍♂️ Auditor verificando veracidad de citas...";
 
                       return (
                         <motion.div
@@ -151,7 +156,6 @@ export function Chat() {
                     }
 
                     if (hasResult && toolName === 'generate_chart' && result) {
-                      // 2. Generative UI Render (When execution finishes)
                       return (
                         <motion.div key={toolCallId} initial={{ opacity: 0, scale: 0.95, y: 10 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full mt-2">
                            <GenerativeChart data={result.data} title={result.title} />
@@ -168,7 +172,7 @@ export function Chat() {
           );
         })}
 
-        {/* Error State */}
+        {/* Estado de error */}
         {error && (
           <div className="flex gap-4 justify-start">
              <div className="w-10 h-10 shrink-0 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/50 mt-1">
@@ -180,7 +184,7 @@ export function Chat() {
           </div>
         )}
 
-        {/* Global LLM Processing Initial Loader */}
+        {/* Loader inicial mientras el LLM procesa */}
         {(status === "submitted" || status === "streaming") && messages.length > 0 && messages[messages.length-1].role === 'user' && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-4">
              <div className="w-10 h-10 rounded-full bg-teal-500/20 flex items-center justify-center shrink-0 border border-teal-500/50">
@@ -188,6 +192,9 @@ export function Chat() {
              </div>
           </motion.div>
         )}
+
+        {/* Anchor para auto-scroll */}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="p-4 border-t border-zinc-900 bg-zinc-950/90 backdrop-blur-xl relative z-10">
@@ -195,7 +202,6 @@ export function Chat() {
           onSubmit={(e) => {
             e.preventDefault();
             if (!input || input.trim().length === 0) return;
-            // SDK v6: sendMessage expects { text: string }, NOT { content, role }
             sendMessage({ text: input });
             setInput('');
           }}
@@ -210,8 +216,7 @@ export function Chat() {
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                const loading = status === 'streaming' || status === 'submitted';
-                if (input && input.trim() && !loading) {
+                if (input && input.trim() && !isLoading) {
                    e.currentTarget.form?.requestSubmit();
                 }
               }
@@ -219,7 +224,7 @@ export function Chat() {
           />
           <button
             type="submit"
-            disabled={status === 'streaming' || status === 'submitted'}
+            disabled={isLoading}
             className="px-8 py-4 bg-teal-500 min-w-[120px] text-zinc-950 font-bold tracking-tight rounded-2xl hover:bg-teal-400 focus:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] hover:shadow-[0_0_30px_rgba(20,184,166,0.5)]"
           >
             Preguntar

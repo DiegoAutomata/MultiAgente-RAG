@@ -1,5 +1,5 @@
 import { anthropic } from '@ai-sdk/anthropic';
-import { streamText, tool, convertToModelMessages, type UIMessage } from 'ai';
+import { streamText, tool, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { z } from 'zod';
 import { investigatorAgent } from '@/features/ai/services/rag-agents';
 
@@ -7,49 +7,61 @@ export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const body = await req.json();
-
-  // DEBUG: log the actual body to understand SDK v6 body shape
-  console.log('[chat] body keys:', Object.keys(body));
-  console.log('[chat] messages type:', typeof body.messages, 'length:', body.messages?.length);
-  console.log('[chat] message type:', typeof body.message);
-
-  // AI SDK v6 useChat may send either:
-  //   { messages: UIMessage[] }  (full history)
-  //   or { message: UIMessage, messages: UIMessage[], id: string }
-  // We handle both cases defensively.
   const messages: UIMessage[] = body.messages ?? (body.message ? [body.message] : []);
 
   if (messages.length === 0) {
-    console.error('[chat] No messages found in body:', body);
     return new Response(JSON.stringify({ error: 'No messages provided' }), { status: 400 });
   }
 
-  // Convert UI messages to model messages for the AI SDK
   const modelMessages = await convertToModelMessages(messages);
 
   const SYSTEM = `Eres el Orquestador RAG Corporativo definitivo. Eres un analista experto, amable y profesional.
 
-REGLAS DE INTERACCIÓN:
-1. CHARLA CASUAL: Si el usuario te saluda, te pregunta cómo estás, o hace preguntas de cultura general, responde amigablemente SIN usar herramientas.
-2. PREGUNTAS SOBRE DOCUMENTOS: 
-    - Si el usuario pregunta qué documentos hay o cómo se llama el que subió, usa 'list_documents'.
-    - Si pregunta por el contenido o datos específicos, usa 'investigate_database'.
-3. NO ALUCINES: Si los documentos no tienen la respuesta, dilo claramente.
-4. ESTADO DE CARGA: Si ves un documento en 'list_documents' pero 'investigate_database' no devuelve nada, advierte al usuario que el documento se está indexando aún.
-5. RESPUESTA FINAL: SIEMPRE debes proporcionar una respuesta final en texto después de usar una herramienta. NUNCA termines una respuesta con solo el resultado de una herramienta.
+REGLA FUNDAMENTAL — LEE ESTO PRIMERO:
+Tienes documentos cargados en tu base de datos vectorial. Tu misión principal es responder preguntas USANDO esos documentos. NUNCA respondas con conocimiento general cuando la pregunta puede estar cubierta por los documentos.
 
-FLUJO: Saludo -> Lista Documentos -> Búsqueda de Contenido -> Respuesta Analítica Final.`;
+CUÁNDO NO USAR HERRAMIENTAS (excepciones muy estrechas):
+- Saludos puros: "Hola", "Buenos días", "¿Cómo estás?"
+- Preguntas sobre ti mismo: "¿Qué eres?", "¿Qué puedes hacer?"
+- Agradecimientos: "Gracias", "Perfecto"
+
+CUÁNDO USAR 'investigate_database' — OBLIGATORIO:
+- CUALQUIER pregunta sobre regulaciones, normas, leyes, requisitos, límites, velocidades, señales, multas, licencias, procedimientos
+- CUALQUIER pregunta sobre vehículos, motocicletas, transporte, tránsito, circulación
+- CUALQUIER pregunta que busque datos, cifras, porcentajes, información específica
+- CUALQUIER pregunta sobre el contenido de los documentos
+- EN CASO DE DUDA: usa 'investigate_database'. Siempre es mejor buscar que inventar.
+
+CUÁNDO USAR 'list_documents':
+- El usuario pregunta qué archivos o documentos hay disponibles
+- El usuario pregunta cómo se llama el documento que subió
+- Opcionalmente, antes de buscar contenido, para saber qué documentos existen
+
+REGLAS CRÍTICAS:
+1. NUNCA respondas "no tengo acceso" o "no tengo esa información" sin haber llamado primero a 'investigate_database'. Si no buscaste, no puedes saber si está o no.
+2. DESPUÉS de llamar a 'investigate_database', SIEMPRE genera una respuesta en texto basada en lo encontrado.
+3. Si la búsqueda no encuentra nada relevante, dilo claramente PERO primero intenta con otra búsqueda más específica.
+4. NUNCA alucines datos. Basa toda respuesta en lo que devuelve 'investigate_database'.
+
+FLUJO CORRECTO para preguntas de contenido:
+1. Llama a 'investigate_database' con la consulta precisa del usuario
+2. Analiza los resultados
+3. Responde con base ÚNICAMENTE en esos resultados
+
+FORMATO DE RESPUESTA:
+- Escribe directamente la respuesta en texto natural. NUNCA uses etiquetas XML como <resultado>, </resultado>, <respuesta>, <answer> ni similares.
+- No añadas prefijos como "Resultado:", "Respuesta:" o similares. Ve directo al contenido.`;
 
   const result = streamText({
     model: anthropic('claude-3-haiku-20240307') as any,
     system: SYSTEM,
     messages: modelMessages,
-    maxSteps: 5,
+    stopWhen: stepCountIs(5),
     tools: {
       investigate_database: tool({
-        description: 'Searches the RAG vector database for document content. ONLY use this when the user asks for information from PDF documents or reports. Do NOT use it for greetings or routine conversation.',
+        description: 'MANDATORY: Search the RAG vector database for document content. Call this for ANY question about regulations, rules, limits, speeds, vehicles, traffic, licenses, procedures, or any specific information. Always use this before answering from general knowledge. Pass the user question as-is or as a precise keyword query.',
         parameters: z.object({
-          search_query: z.string().describe('Precise keyword/intent query for vector search.')
+          search_query: z.string().describe('The user query or keywords to search. Be specific and use terms from the question (e.g., "velocidad máxima motocicleta vía urbana", "requisitos licencia conducir").')
         }),
         execute: async (args: Record<string, unknown>) => {
           // Defensive: extract search_query from any possible shape
@@ -108,7 +120,11 @@ FLUJO: Saludo -> Lista Documentos -> Búsqueda de Contenido -> Respuesta Analít
               value: z.number()
             })
           )
-        })
+        }),
+        execute: async ({ title, xAxisKey, data }) => {
+          // Returns chart data for client-side rendering via GenerativeChart component
+          return { title, xAxisKey, data };
+        }
       } as any)
     }
   } as any);
