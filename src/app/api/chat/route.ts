@@ -2,10 +2,19 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { streamText, tool, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { z } from 'zod';
 import { investigatorAgent } from '@/features/ai/services/rag-agents';
+import { createClient } from '@/lib/supabase/server';
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  // Validate session
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
+  }
+  const userId = user.id;
+
   const body = await req.json();
   const messages: UIMessage[] = body.messages ?? (body.message ? [body.message] : []);
 
@@ -70,11 +79,11 @@ FORMATO DE RESPUESTA:
               .map((p: any) => p.text)
               .join(' ') || 'documento';
             console.log('[chat] Using fallback query from last user message:', fallbackQuery);
-            const context = await investigatorAgent(fallbackQuery);
+            const context = await investigatorAgent(fallbackQuery, userId);
             return { status: 'success', context: context || 'No se encontró información relevante.' };
           }
-          
-          const context = await investigatorAgent(query);
+
+          const context = await investigatorAgent(query, userId);
           return {
             status: 'success',
             context: context || 'No se encontró información relevante en los documentos.'
@@ -114,7 +123,7 @@ FORMATO DE RESPUESTA:
             })
           )
         }),
-        execute: async ({ title, xAxisKey, data }) => {
+        execute: async ({ title, xAxisKey, data }: { title: string; xAxisKey: string; data: { name: string; value: number }[] }) => {
           // Returns chart data for client-side rendering via GenerativeChart component
           return { title, xAxisKey, data };
         }

@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import path from 'path';
+import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
 export const maxDuration = 300;
@@ -10,17 +11,19 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
+    // Validate session before processing anything
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const userId = user.id;
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
-    let userId = formData.get('userId') as string;
 
     if (!file) {
       return NextResponse.json({ error: 'Missing file' }, { status: 400 });
-    }
-
-    if (!userId) {
-      // Fallback dummy user for demo mode (Valid Supabase user)
-      userId = '60f831a2-d501-4405-9600-915709179c79';
     }
 
     // Save file to /tmp

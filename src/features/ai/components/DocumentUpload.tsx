@@ -2,26 +2,30 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { UploadCloud, FileText, CheckCircle, Loader2 } from "lucide-react";
+import { UploadCloud, FileText, CheckCircle, Loader2, Trash2, FileMinus } from "lucide-react";
 import { useRagStore } from "../store/rag-store";
+import { useAuth } from "@/features/auth/hooks/useAuth";
 
 export function DocumentUpload() {
   const setDocumentUploaded = useRagStore(s => s.setDocumentUploaded);
   const setIsUploadingDocument = useRagStore(s => s.setIsUploadingDocument);
+  const { user } = useAuth();
+
   const [file, setFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [isDeletingLast, setIsDeletingLast] = useState(false);
+  const [actionMessage, setActionMessage] = useState<{ text: string; isError: boolean } | null>(null);
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const showMessage = (text: string, isError = false) => {
+    setActionMessage({ text, isError });
+    setTimeout(() => setActionMessage(null), 3500);
   };
 
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); setIsDragging(false); };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -31,7 +35,7 @@ export function DocumentUpload() {
       setFile(droppedFile);
       setUploadSuccess(false);
     } else {
-      alert("Por favor sube solo archivos PDF.");
+      showMessage("Por favor sube solo archivos PDF.", true);
     }
   };
 
@@ -42,30 +46,69 @@ export function DocumentUpload() {
 
     const formData = new FormData();
     formData.append("file", file);
+    if (user?.id) formData.append("userId", user.id);
 
     try {
-      const res = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
-
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
       if (res.ok) {
         setUploadSuccess(true);
         setDocumentUploaded(true);
       } else {
-        alert("Error en la subida y procesamiento.");
+        const data = await res.json().catch(() => ({}));
+        showMessage(data.error ?? "Error en la subida y procesamiento.", true);
       }
-    } catch (error) {
-      alert("Error de red");
+    } catch {
+      showMessage("Error de red. Verifica tu conexión.", true);
     } finally {
       setIsUploading(false);
       setIsUploadingDocument(false);
     }
   };
 
+  const handleClearAll = async () => {
+    if (!confirm("¿Seguro que quieres vaciar TODA tu base de datos? Esta acción no se puede deshacer.")) return;
+    setIsClearing(true);
+    try {
+      const res = await fetch("/api/documents", { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        setUploadSuccess(false);
+        setDocumentUploaded(false);
+        setFile(null);
+        showMessage("Base de datos vaciada correctamente.");
+      } else {
+        showMessage(data.error ?? "Error al vaciar la base de datos.", true);
+      }
+    } catch {
+      showMessage("Error de red al vaciar la base de datos.", true);
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  const handleDeleteLast = async () => {
+    if (!confirm("¿Eliminar el último archivo subido?")) return;
+    setIsDeletingLast(true);
+    try {
+      const res = await fetch("/api/documents/last", { method: "DELETE" });
+      const data = await res.json();
+      if (res.ok) {
+        showMessage(`"${data.deleted}" eliminado correctamente.`);
+        setUploadSuccess(false);
+        setDocumentUploaded(false);
+        setFile(null);
+      } else {
+        showMessage(data.error ?? "Error al eliminar el documento.", true);
+      }
+    } catch {
+      showMessage("Error de red.", true);
+    } finally {
+      setIsDeletingLast(false);
+    }
+  };
+
   return (
     <div className="bg-zinc-950/80 backdrop-blur-xl border border-zinc-800/80 rounded-3xl p-6 shadow-2xl relative overflow-hidden h-full flex flex-col justify-center">
-      {/* Decorative Blur */}
       <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 rounded-full blur-[80px] -z-10" />
 
       <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Cargar Base de Conocimiento</h3>
@@ -82,10 +125,10 @@ export function DocumentUpload() {
           <CheckCircle size={48} />
           <p className="font-semibold text-center">¡Documento procesado e indexado!</p>
           <button
-             onClick={() => { setFile(null); setUploadSuccess(false); setDocumentUploaded(false); }}
-             className="mt-2 text-sm underline text-teal-400/80 hover:text-teal-300"
+            onClick={() => { setFile(null); setUploadSuccess(false); setDocumentUploaded(false); }}
+            className="mt-2 text-sm underline text-teal-400/80 hover:text-teal-300"
           >
-             Sumbir otro documento
+            Subir otro documento
           </button>
         </motion.div>
       ) : (
@@ -98,26 +141,16 @@ export function DocumentUpload() {
           }`}
           onClick={() => document.getElementById('file-upload')?.click()}
         >
-          <input 
-             id="file-upload" 
-             type="file" 
-             accept="application/pdf" 
-             className="hidden" 
-             onChange={(e) => {
-                if (e.target.files?.[0]) {
-                   setFile(e.target.files[0]);
-                }
-             }}
+          <input
+            id="file-upload"
+            type="file"
+            accept="application/pdf"
+            className="hidden"
+            onChange={(e) => { if (e.target.files?.[0]) setFile(e.target.files[0]); }}
           />
           <AnimatePresence mode="popLayout">
             {!file ? (
-              <motion.div
-                key="empty"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex flex-col items-center gap-4 text-center"
-              >
+              <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex flex-col items-center gap-4 text-center">
                 <div className="w-16 h-16 rounded-full bg-zinc-800/50 flex items-center justify-center">
                   <UploadCloud className="text-zinc-500" size={32} />
                 </div>
@@ -127,13 +160,7 @@ export function DocumentUpload() {
                 </div>
               </motion.div>
             ) : (
-              <motion.div
-                key="file"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="flex flex-col items-center gap-4 w-full"
-              >
+              <motion.div key="file" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="flex flex-col items-center gap-4 w-full">
                 <div className="w-16 h-16 rounded-2xl bg-teal-500/20 flex items-center justify-center border border-teal-500/30">
                   <FileText className="text-teal-400" size={32} />
                 </div>
@@ -141,29 +168,58 @@ export function DocumentUpload() {
                   <p className="text-white font-medium truncate">{file.name}</p>
                   <p className="text-zinc-500 text-sm mt-1">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                 </div>
-                
                 <button
-                  onClick={(e) => {
-                     e.stopPropagation();
-                     handleUpload();
-                  }}
+                  onClick={(e) => { e.stopPropagation(); handleUpload(); }}
                   disabled={isUploading}
                   className="mt-4 px-6 py-3 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 w-full justify-center"
                 >
                   {isUploading ? (
-                    <>
-                      <Loader2 size={18} className="animate-spin" />
-                      Procesando con IA...
-                    </>
-                  ) : (
-                    "Ingestar Documento"
-                  )}
+                    <><Loader2 size={18} className="animate-spin" />Procesando con IA...</>
+                  ) : "Ingestar Documento"}
                 </button>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
       )}
+
+      {/* Feedback message */}
+      <AnimatePresence>
+        {actionMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className={`mt-3 px-4 py-2 rounded-xl text-sm font-medium text-center ${
+              actionMessage.isError
+                ? "bg-red-500/10 border border-red-500/20 text-red-400"
+                : "bg-teal-500/10 border border-teal-500/20 text-teal-400"
+            }`}
+          >
+            {actionMessage.text}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* DB Management Buttons */}
+      <div className="mt-4 flex gap-2">
+        <button
+          onClick={handleDeleteLast}
+          disabled={isDeletingLast || isClearing}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-zinc-900 border border-zinc-700 hover:border-amber-500/50 hover:bg-amber-500/5 text-zinc-400 hover:text-amber-400 rounded-xl text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {isDeletingLast ? <Loader2 size={14} className="animate-spin" /> : <FileMinus size={14} />}
+          Eliminar último archivo
+        </button>
+        <button
+          onClick={handleClearAll}
+          disabled={isClearing || isDeletingLast}
+          className="flex-1 flex items-center justify-center gap-2 px-3 py-2.5 bg-zinc-900 border border-zinc-700 hover:border-red-500/50 hover:bg-red-500/5 text-zinc-400 hover:text-red-400 rounded-xl text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {isClearing ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+          Vaciar base de datos
+        </button>
+      </div>
     </div>
   );
 }

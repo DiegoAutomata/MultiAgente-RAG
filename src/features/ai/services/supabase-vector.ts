@@ -24,76 +24,111 @@ function createAdminClient() {
 
 /**
  * Performs a hybrid search against document_chunks.
- * Uses the service_role key to bypass RLS.
- * 
+ * Uses the service_role key to bypass RLS, but applies explicit user_id filtering
+ * to ensure multi-tenant data isolation.
+ *
  * Strategy:
- * 1. Try RPC function (if it exists and works)
- * 2. Fallback: Direct table query with text matching (ilike)
- * 3. Last resort: Fetch all chunks ordered by index
+ * 1. Resolve the user's document IDs (if userId provided)
+ * 2. Try RPC function + post-filter by user docs
+ * 3. Fallback: Direct table query with text matching (ilike) + user filter
+ * 4. Last resort: Fetch recent chunks filtered by user
  */
 export async function performHybridSearch(
   queryText: string,
   queryEmbedding: number[],
-  matchCount: number = 10
+  matchCount: number = 10,
+  userId?: string
 ) {
   const supabase = createAdminClient();
 
-  // Strategy 1: Try the RPC function
+  // Resolve user's document IDs for tenant isolation
+  let userDocIds: string[] | null = null;
+  if (userId) {
+    const { data: userDocs, error: docsError } = await supabase
+      .from("documents")
+      .select("id")
+      .eq("user_id", userId);
+
+    if (docsError) {
+      console.warn("[search] Could not fetch user document IDs:", docsError.message);
+    } else {
+      userDocIds = userDocs?.map((d: { id: string }) => d.id) ?? [];
+      console.log(`[search] User ${userId} has ${userDocIds.length} documents`);
+
+      if (userDocIds.length === 0) {
+        console.log("[search] User has no documents, returning empty results");
+        return [];
+      }
+    }
+  }
+
+  // Strategy 1: Try the RPC function, then post-filter by user's docs
   try {
     const { data, error } = await supabase.rpc("match_document_chunks_hybrid", {
       query_text: queryText,
       query_embedding: queryEmbedding,
-      match_count: matchCount,
+      match_count: matchCount * 3, // fetch extra to allow for user filtering
       full_text_weight: 1.0,
       semantic_weight: 1.0,
       rrf_k: 50,
     });
 
     if (!error && data && data.length > 0) {
-      console.log(`[search] RPC returned ${data.length} results`);
-      return data as Array<{
-        id: string;
-        document_id: string;
-        content: string;
-        similarity: number;
-      }>;
+      const filtered = userDocIds
+        ? data.filter((r: { document_id: string }) => userDocIds!.includes(r.document_id))
+        : data;
+
+      if (filtered.length > 0) {
+        console.log(`[search] RPC returned ${filtered.length} results (user-filtered)`);
+        return filtered.slice(0, matchCount) as Array<{
+          id: string;
+          document_id: string;
+          content: string;
+          similarity: number;
+        }>;
+      }
+
+      console.warn("[search] RPC returned results but none belong to this user");
     }
 
     if (error) {
       console.warn("[search] RPC failed:", error.message);
-    } else {
-      console.warn("[search] RPC returned 0 results, trying direct search");
     }
   } catch (rpcErr) {
     console.warn("[search] RPC threw exception:", rpcErr);
   }
 
-  // Strategy 2: Direct text search using ilike (works regardless of FTS config)
-  // Build search terms from the query, ignoring common stop words
+  // Strategy 2: Direct text search using ilike filtered by user's documents
   const searchTerms = queryText
     .toLowerCase()
     .replace(/[¿?¡!]/g, '')
     .split(/\s+/)
-    .filter(t => t.length > 3) // Only useful keywords
-    .slice(0, 8); 
+    .filter(t => t.length > 3)
+    .slice(0, 8);
 
   console.log("[search] Falling back to direct search with terms:", searchTerms);
 
-  const matchedChunks: Map<string, any> = new Map();
+  const matchedChunks: Map<string, { id: string; document_id: string; content: string; score: number }> = new Map();
 
   for (const term of searchTerms) {
-    const { data: matchData } = await supabase
+    let query = supabase
       .from("document_chunks")
       .select("id, document_id, content")
       .ilike("content", `%${term}%`)
       .limit(5);
 
+    if (userDocIds) {
+      query = query.in("document_id", userDocIds);
+    }
+
+    const { data: matchData } = await query;
+
     if (matchData) {
-      matchData.forEach(row => {
+      matchData.forEach((row: { id: string; document_id: string; content: string }) => {
         if (!matchedChunks.has(row.id)) {
           matchedChunks.set(row.id, { ...row, score: 1 });
         } else {
-          matchedChunks.get(row.id).score += 1;
+          matchedChunks.get(row.id)!.score += 1;
         }
       });
     }
@@ -103,21 +138,27 @@ export async function performHybridSearch(
     const results = Array.from(matchedChunks.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, matchCount);
-    
+
     console.log(`[search] Direct search aggregated ${results.length} results`);
     return results.map((r, i) => ({
       ...r,
-      similarity: 0.9 / (i + 1), // Standard similarity score for fallback
+      similarity: 0.9 / (i + 1),
     }));
   }
 
-  // Strategy 3: Last resort — return recent chunks (for small datasets in demo mode)
+  // Strategy 3: Last resort — return recent chunks filtered by user
   console.warn("[search] No keyword matches. Fetching recent chunks as fallback...");
-  const { data: allData, error: allError } = await supabase
+  let lastResortQuery = supabase
     .from("document_chunks")
     .select("id, document_id, content")
     .order("chunk_index", { ascending: true })
     .limit(matchCount);
+
+  if (userDocIds) {
+    lastResortQuery = lastResortQuery.in("document_id", userDocIds);
+  }
+
+  const { data: allData, error: allError } = await lastResortQuery;
 
   if (allError) {
     console.error("[search] All search strategies failed:", allError.message);
@@ -125,7 +166,7 @@ export async function performHybridSearch(
   }
 
   console.log(`[search] Fallback returned ${allData?.length ?? 0} chunks`);
-  return (allData ?? []).map((row, i) => ({
+  return (allData ?? []).map((row: { id: string; document_id: string; content: string }, i: number) => ({
     ...row,
     similarity: 1.0 / (i + 1),
   }));

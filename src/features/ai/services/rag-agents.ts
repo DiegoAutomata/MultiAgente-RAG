@@ -58,14 +58,14 @@ async function generateQueryEmbedding(text: string): Promise<number[]> {
 /**
  * 2. Investigator Agent: Retrieves context and reranks it
  */
-export async function investigatorAgent(query: string): Promise<string> {
+export async function investigatorAgent(query: string, userId?: string): Promise<string> {
   const start = Date.now();
-  console.log(`[investigator] Starting retrieval for: "${query}"`);
-  
+  console.log(`[investigator] Starting retrieval for: "${query}" (userId: ${userId ?? 'anonymous'})`);
+
   try {
     const queryEmbedding = await generateQueryEmbedding(query);
-    // Perform Hybrid Search (BM25 + Cosine similarity via RRF)
-    const results = await performHybridSearch(query, queryEmbedding, 15);
+    // Perform Hybrid Search (BM25 + Cosine similarity via RRF), filtered by user
+    const results = await performHybridSearch(query, queryEmbedding, 15, userId);
 
     const duration = Date.now() - start;
     console.log(`[investigator] Found ${results.length} results in ${duration}ms`);
