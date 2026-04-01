@@ -66,25 +66,35 @@ export function AgentFlowVisualizer() {
        </div>
 
        <div className="flex items-center justify-between w-full px-2 pb-6">
-          <Node id="user" label="Prompt" icon={User} isActive={activeAgent === 'user'} isPast={activeAgent !== 'idle'} />
-          <Edge active={['semantic-router','investigator','redactor','auditor'].includes(activeAgent)} />
-          
-          <Node id="semantic-router" label="Router" icon={GitMerge} isActive={activeAgent === 'semantic-router'} isPast={['investigator','redactor','auditor'].includes(activeAgent)} />
-          <Edge active={['investigator','redactor','auditor'].includes(activeAgent)} />
-          
-          <Node id="investigator" label="RAG Engine" icon={Database} isActive={activeAgent === 'investigator'} isPast={['redactor','auditor'].includes(activeAgent)} />
+          <Node id="user" label="Ingesta" icon={User}
+            isActive={activeAgent === 'user'}
+            isPast={activeAgent !== 'idle'} />
+          <Edge active={['semantic-router','investigator','indexing','redactor','auditor'].includes(activeAgent)} />
+
+          <Node id="semantic-router" label="Router" icon={GitMerge}
+            isActive={activeAgent === 'semantic-router'}
+            isPast={['investigator','indexing','redactor','auditor'].includes(activeAgent)} />
+          <Edge active={['investigator','indexing','redactor','auditor'].includes(activeAgent)} />
+
+          <Node id="investigator" label="RAG Engine" icon={Database}
+            isActive={activeAgent === 'investigator' || activeAgent === 'indexing'}
+            isPast={['redactor','auditor'].includes(activeAgent)} />
           <Edge active={['redactor','auditor'].includes(activeAgent)} />
-          
-          <Node id="redactor" label="Redactor" icon={Cpu} isActive={activeAgent === 'redactor'} isPast={activeAgent === 'auditor'} />
+
+          <Node id="redactor" label="Redactor" icon={Cpu}
+            isActive={activeAgent === 'redactor'}
+            isPast={activeAgent === 'auditor'} />
           <Edge active={activeAgent === 'auditor'} />
-          
-          <Node id="auditor" label="Auditor" icon={ShieldAlert} isActive={activeAgent === 'auditor'} isPast={false} />
+
+          <Node id="auditor" label="Auditor" icon={ShieldAlert}
+            isActive={activeAgent === 'auditor'}
+            isPast={false} />
        </div>
 
        {/* Dynamic Explanation Panel */}
-       <div className="mt-8 pt-4 border-t border-zinc-800/80 min-h-[80px]">
+       <div className="mt-8 pt-4 border-t border-zinc-800/80 min-h-[72px]">
           <AnimatePresence mode="wait">
-             <motion.div 
+             <motion.div
                 key={activeAgent}
                 initial={{ opacity: 0, y: 5 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -92,22 +102,22 @@ export function AgentFlowVisualizer() {
                 className="text-sm text-zinc-400 leading-relaxed"
              >
                 {activeAgent === 'idle' && (
-                  <p><b className="text-white">Flujo Inactivo:</b> Esperando el ingreso de una consulta o documento. Las capas de Inteligencia Artificial están en modo lectura.</p>
+                  <p><b className="text-white">Flujo Inactivo:</b> Esperando consulta o documento. Las capas de IA están en modo lectura.</p>
                 )}
                 {activeAgent === 'user' && (
-                  <p><b className="text-teal-400">1. Prompt de Usuario:</b> El sistema capta la intención (Ej: 'Encuentra discrepancias en el contrato').</p>
+                  <p><b className="text-teal-400">Recibiendo documento:</b> El sistema recibe el archivo y lo prepara para procesamiento.</p>
                 )}
                 {activeAgent === 'semantic-router' && (
-                  <p><b className="text-teal-400">2. Semantic Router (Haiku):</b> Evalúa en milisegundos si la consulta requiere recuperación de documentos (RAG) o es simple contexto conversacional para no desperdiciar poder de cómputo.</p>
+                  <p><b className="text-teal-400">Semantic Router:</b> Evalúa si la consulta requiere recuperación de documentos o es contexto conversacional.</p>
                 )}
-                {activeAgent === 'investigator' && (
-                  <p><b className="text-teal-400">3. RAG Investigator:</b> Extrae y re-rankea los fragmentos exactos del PDF basándose en cercanía matemática (Cosine Similarity) dentro de la base Vectorial.</p>
+                {(activeAgent === 'investigator' || activeAgent === 'indexing') && (
+                  <p><b className="text-teal-400">RAG Engine:</b> {activeAgent === 'indexing' ? 'Segmentando texto, generando embeddings e indexando en la base vectorial...' : 'Extrae y re-rankea fragmentos del documento por cercanía semántica (Cosine Similarity).'}</p>
                 )}
                 {activeAgent === 'redactor' && (
-                  <p><b className="text-teal-400">4. Sonnet Redactor:</b> Claude 4.6 toma los datos crudos extraídos y estructura una respuesta comercial, métrica o financiera de forma coherente.</p>
+                  <p><b className="text-teal-400">Redactor:</b> Claude procesa los fragmentos recuperados y estructura una respuesta coherente.</p>
                 )}
                 {activeAgent === 'auditor' && (
-                  <p><b className="text-teal-400">5. Hallucination Auditor:</b> Antes de mostrarte la respuesta, un agente cruzado valida cada cita para asegurar 0% alucinaciones e inconsistencias.</p>
+                  <p><b className="text-teal-400">Auditor Anti-Alucinación:</b> Valida cada cita contra el documento original. 0% alucinaciones garantizado.</p>
                 )}
              </motion.div>
           </AnimatePresence>

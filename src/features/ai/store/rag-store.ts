@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 
 interface RagState {
-  activeAgent: 'idle' | 'user' | 'semantic-router' | 'investigator' | 'redactor' | 'auditor';
+  activeAgent: 'idle' | 'user' | 'semantic-router' | 'investigator' | 'redactor' | 'auditor' | 'indexing';
   setActiveAgent: (agent: RagState['activeAgent']) => void;
-  
+
   documentUploaded: boolean;
   setDocumentUploaded: (status: boolean) => void;
 
@@ -14,7 +14,7 @@ interface RagState {
 export const useRagStore = create<RagState>((set) => ({
   activeAgent: 'idle',
   setActiveAgent: (agent) => set({ activeAgent: agent }),
-  
+
   documentUploaded: false,
   setDocumentUploaded: (status) => set({ documentUploaded: status }),
 

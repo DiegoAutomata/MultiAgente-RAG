@@ -9,6 +9,7 @@ import { useAuth } from "@/features/auth/hooks/useAuth";
 export function DocumentUpload() {
   const setDocumentUploaded = useRagStore(s => s.setDocumentUploaded);
   const setIsUploadingDocument = useRagStore(s => s.setIsUploadingDocument);
+  const setActiveAgent = useRagStore(s => s.setActiveAgent);
   const { user } = useAuth();
 
   const [file, setFile] = useState<File | null>(null);
@@ -44,6 +45,11 @@ export function DocumentUpload() {
     setIsUploading(true);
     setIsUploadingDocument(true);
 
+    // Animate the agent flow: user → investigator → indexing → auditor → idle
+    setActiveAgent('user');
+    const agentTimer1 = setTimeout(() => setActiveAgent('investigator'), 800);
+    const agentTimer2 = setTimeout(() => setActiveAgent('indexing'), 2500);
+
     const formData = new FormData();
     formData.append("file", file);
     if (user?.id) formData.append("userId", user.id);
@@ -51,13 +57,29 @@ export function DocumentUpload() {
     try {
       const res = await fetch("/api/upload", { method: "POST", body: formData });
       if (res.ok) {
+        clearTimeout(agentTimer1);
+        clearTimeout(agentTimer2);
+        setActiveAgent('auditor');
+        setTimeout(() => setActiveAgent('idle'), 1500);
         setUploadSuccess(true);
         setDocumentUploaded(true);
       } else {
+        clearTimeout(agentTimer1);
+        clearTimeout(agentTimer2);
+        setActiveAgent('idle');
         const data = await res.json().catch(() => ({}));
-        showMessage(data.error ?? "Error en la subida y procesamiento.", true);
+        // 401 = sesión expirada, redirigir al login
+        if (res.status === 401) {
+          showMessage("Sesión expirada. Redirigiendo al login...", true);
+          setTimeout(() => { window.location.href = '/login'; }, 1500);
+        } else {
+          showMessage(data.error ?? "Error en la subida y procesamiento.", true);
+        }
       }
     } catch {
+      clearTimeout(agentTimer1);
+      clearTimeout(agentTimer2);
+      setActiveAgent('idle');
       showMessage("Error de red. Verifica tu conexión.", true);
     } finally {
       setIsUploading(false);
