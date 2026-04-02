@@ -1,6 +1,5 @@
 import { anthropic } from '@ai-sdk/anthropic';
-import { streamText, tool, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
-import { z } from 'zod';
+import { streamText, tool, jsonSchema, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { investigatorAgent } from '@/features/ai/services/rag-agents';
 import { createClient } from '@/lib/supabase/server';
 
@@ -62,8 +61,16 @@ FORMATO DE RESPUESTA:
     tools: {
       investigate_database: tool({
         description: 'MANDATORY: Search the RAG vector database for document content. Call this for ANY question about regulations, rules, limits, speeds, vehicles, traffic, licenses, procedures, or any specific information. Always use this before answering from general knowledge. Pass the user question as-is or as a precise keyword query.',
-        parameters: z.object({
-          search_query: z.string().describe('The user query or keywords to search. Be specific and use terms from the question (e.g., "velocidad máxima motocicleta vía urbana", "requisitos licencia conducir").')
+        parameters: jsonSchema<{ search_query: string }>({
+          type: 'object',
+          properties: {
+            search_query: {
+              type: 'string',
+              description: 'The user query or keywords to search. Be specific and use terms from the question.'
+            }
+          },
+          required: ['search_query'],
+          additionalProperties: false
         }),
         execute: async (args: Record<string, unknown>) => {
           // Defensive: extract search_query from any possible shape
@@ -92,7 +99,11 @@ FORMATO DE RESPUESTA:
       } as any),
       list_documents: tool({
         description: 'Checks the database for metadata of uploaded files (name, upload date). Call this when the user asks which document they provided.',
-        parameters: z.object({}),
+        parameters: jsonSchema<Record<string, never>>({
+          type: 'object',
+          properties: {},
+          additionalProperties: false
+        }),
         execute: async () => {
           console.log('[chat] list_documents called');
           const { performHybridSearch } = await import('@/features/ai/services/supabase-vector');
@@ -113,15 +124,26 @@ FORMATO DE RESPUESTA:
       } as any),
       generate_chart: tool({
         description: 'Generates an Interactive Recharts graphic. Call this ONLY when representing trends, percentages or quantifiable data from retrieved documents.',
-        parameters: z.object({
-          title: z.string().describe('Title of the chart'),
-          xAxisKey: z.string().describe('X axis label'),
-          data: z.array(
-            z.object({
-              name: z.string(),
-              value: z.number()
-            })
-          )
+        parameters: jsonSchema<{ title: string; xAxisKey: string; data: { name: string; value: number }[] }>({
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Title of the chart' },
+            xAxisKey: { type: 'string', description: 'X axis label' },
+            data: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  value: { type: 'number' }
+                },
+                required: ['name', 'value'],
+                additionalProperties: false
+              }
+            }
+          },
+          required: ['title', 'xAxisKey', 'data'],
+          additionalProperties: false
         }),
         execute: async ({ title, xAxisKey, data }: { title: string; xAxisKey: string; data: { name: string; value: number }[] }) => {
           // Returns chart data for client-side rendering via GenerativeChart component
