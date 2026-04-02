@@ -61,7 +61,7 @@ FORMATO DE RESPUESTA:
     tools: {
       investigate_database: tool({
         description: 'MANDATORY: Search the RAG vector database for document content. Call this for ANY question about regulations, rules, limits, speeds, vehicles, traffic, licenses, procedures, or any specific information. Always use this before answering from general knowledge. Pass the user question as-is or as a precise keyword query.',
-        parameters: jsonSchema<{ search_query: string }>({
+        inputSchema: jsonSchema<{ search_query: string }>({
           type: 'object',
           properties: {
             search_query: {
@@ -72,10 +72,8 @@ FORMATO DE RESPUESTA:
           required: ['search_query'],
           additionalProperties: false
         }),
-        execute: async (args: Record<string, unknown>) => {
-          // Defensive: extract search_query from any possible shape
-          const rawQuery = (args as any)?.search_query ?? (args as any)?.query ?? '';
-          const query = typeof rawQuery === 'string' ? rawQuery.trim() : '';
+        execute: async ({ search_query }: { search_query: string }) => {
+          const query = (search_query ?? '').trim();
           console.log('[chat] investigate_database called with query:', JSON.stringify(query));
           
           if (!query) {
@@ -99,7 +97,7 @@ FORMATO DE RESPUESTA:
       } as any),
       list_documents: tool({
         description: 'Checks the database for metadata of uploaded files (name, upload date). Call this when the user asks which document they provided.',
-        parameters: jsonSchema<Record<string, never>>({
+        inputSchema: jsonSchema<Record<string, never>>({
           type: 'object',
           properties: {},
           additionalProperties: false
@@ -124,7 +122,7 @@ FORMATO DE RESPUESTA:
       } as any),
       generate_chart: tool({
         description: 'Generates an Interactive Recharts graphic. Call this ONLY when representing trends, percentages or quantifiable data from retrieved documents.',
-        parameters: jsonSchema<{ title: string; xAxisKey: string; data: { name: string; value: number }[] }>({
+        inputSchema: jsonSchema<{ title: string; xAxisKey: string; data: { name: string; value: number }[] }>({
           type: 'object',
           properties: {
             title: { type: 'string', description: 'Title of the chart' },
