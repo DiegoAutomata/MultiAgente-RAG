@@ -112,6 +112,7 @@ async def ingest_document(user_id: str, file_path: str, title: str):
 
     # 3. Create Document Record
     doc_response = supabase.table("documents").insert({
+        "user_id": user_id,
         "title": title,
         "content_type": "pdf",
         "metadata": {"source_file": os.path.basename(file_path)}
@@ -145,6 +146,7 @@ async def ingest_document(user_id: str, file_path: str, title: str):
 
         chunk_data = {
             "document_id": document_id,
+            "user_id": user_id,
             "content": chunk,
             "chunk_index": idx
         }
