@@ -2,6 +2,7 @@ import { anthropic } from '@ai-sdk/anthropic';
 import { streamText, tool, jsonSchema, convertToModelMessages, stepCountIs, type UIMessage } from 'ai';
 import { investigatorAgent } from '@/features/ai/services/rag-agents';
 import { createClient } from '@/lib/supabase/server';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const maxDuration = 60;
 
@@ -13,6 +14,12 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401 });
   }
   const userId = user.id;
+
+  // Rate limit: max 30 messages per user per minute
+  const rl = rateLimit(`chat:${userId}`, 30, 60 * 1000);
+  if (!rl.allowed) {
+    return new Response(JSON.stringify({ error: 'Demasiadas solicitudes. Espera un momento.' }), { status: 429 });
+  }
 
   const body = await req.json();
   const messages: UIMessage[] = body.messages ?? (body.message ? [body.message] : []);

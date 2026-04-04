@@ -73,13 +73,19 @@ export async function performHybridSearch(
     });
 
     if (!error && data && data.length > 0) {
-      console.log(`[search] RPC returned ${data.length} results`);
-      return data as Array<{
-        id: string;
-        document_id: string;
-        content: string;
-        similarity: number;
-      }>;
+      // Filter out chunks below minimum similarity threshold (RRF score)
+      // RRF scores are small by nature (~0.01–0.02); 0.005 removes true noise
+      const MIN_SIMILARITY = 0.005;
+      const filtered = data.filter((r: { similarity: number }) => r.similarity >= MIN_SIMILARITY);
+      console.log(`[search] RPC returned ${filtered.length}/${data.length} results above threshold`);
+      if (filtered.length > 0) {
+        return filtered as Array<{
+          id: string;
+          document_id: string;
+          content: string;
+          similarity: number;
+        }>;
+      }
     }
 
     if (error) {

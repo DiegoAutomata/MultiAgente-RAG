@@ -61,17 +61,18 @@ export function DocumentUpload() {
         clearTimeout(agentTimer2);
         setIsUploading(false);
 
-        // Poll until document appears in DB (Python pipeline ~30-120s for large files)
-        const uploadedTitle = file.name.replace(/\s+/g, '_');
+        // Poll until document status = 'completed' or 'failed'
+        const uploadedTitle = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
         const pollStart = Date.now();
-        const MAX_WAIT = 4 * 60 * 1000;
+        const MAX_WAIT = 10 * 60 * 1000; // 10 min for large files
 
         const poll = async () => {
           try {
             const r = await fetch("/api/documents");
             if (r.ok) {
               const d = await r.json();
-              if ((d.documents ?? []).some((doc: { title: string }) => doc.title === uploadedTitle)) {
+              const doc = (d.documents ?? []).find((doc: { title: string; status: string }) => doc.title === uploadedTitle);
+              if (doc?.status === 'completed') {
                 setActiveAgent('auditor');
                 setTimeout(() => setActiveAgent('idle'), 1500);
                 setUploadSuccess(true);
@@ -79,18 +80,25 @@ export function DocumentUpload() {
                 setIsUploadingDocument(false);
                 return;
               }
+              if (doc?.status === 'failed') {
+                setActiveAgent('idle');
+                setIsUploadingDocument(false);
+                showMessage("Error al procesar el documento. Intenta nuevamente.", true);
+                return;
+              }
             }
           } catch { /* retry */ }
           if (Date.now() - pollStart < MAX_WAIT) {
             setTimeout(poll, 5000);
           } else {
+            // Timeout — assume completed (very large file)
             setActiveAgent('idle');
             setUploadSuccess(true);
             setDocumentUploaded(true);
             setIsUploadingDocument(false);
           }
         };
-        setTimeout(poll, 8000); // first check after 8s
+        setTimeout(poll, 5000); // first check after 5s
       } else {
         clearTimeout(agentTimer1);
         clearTimeout(agentTimer2);

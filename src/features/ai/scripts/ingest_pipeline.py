@@ -23,12 +23,21 @@ SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL") or os.getenv("SUPABASE_URL"
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
-    print("WARNING: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env")
-    supabase = None
-else:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    print("ERROR: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env", file=sys.stderr)
+    sys.exit(1)
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 
+def set_document_status(document_id: str, status: str, error_msg: str = None):
+    """Update document status in DB. status: 'processing' | 'completed' | 'failed'"""
+    try:
+        payload = {"status": status}
+        if error_msg:
+            payload["metadata"] = {"error": error_msg[:500]}
+        supabase.table("documents").update(payload).eq("id", document_id).execute()
+    except Exception as e:
+        print(f"⚠️ Could not update document status to '{status}': {e}", file=sys.stderr)
 
 
 def parse_pdf_fast(file_path: str) -> str:
@@ -69,7 +78,7 @@ def parse_pdf_fast(file_path: str) -> str:
 
 
 async def parse_pdf(file_path: str) -> str:
-    """Uses LlamaParse if key available, otherwise pdfplumber (table-aware)."""
+    """Uses LlamaParse if key available, otherwise PyMuPDF (table-aware)."""
     if not os.path.exists(file_path):
         raise FileNotFoundError(f"PDF missing: {file_path}")
 
@@ -84,7 +93,7 @@ async def parse_pdf(file_path: str) -> str:
         documents = await asyncio.to_thread(parser.load_data, file_path)
         return "\n\n".join([doc.text for doc in documents])
 
-    print("INFO: Using pdfplumber (table-aware parser).")
+    print("INFO: Using PyMuPDF (table-aware parser).")
     return parse_pdf_fast(file_path)
 
 
@@ -105,10 +114,6 @@ def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 200) -> list[st
 
 def generate_and_store_embeddings(document_id: str):
     """Phase 2: fetch existing chunks, generate embeddings, update rows in batch."""
-    if not supabase:
-        print("❌ Supabase client not initialized.")
-        return
-
     # Fetch chunks ordered by chunk_index
     rows = supabase.table("document_chunks") \
         .select("id, content, chunk_index") \
@@ -123,8 +128,6 @@ def generate_and_store_embeddings(document_id: str):
     chunks = [r["content"] for r in rows.data]
     ids = [r["id"] for r in rows.data]
     print(f"🧠 Generating embeddings for {len(chunks)} chunks...")
-
-    embeddings: list = []
 
     try:
         from sentence_transformers import SentenceTransformer
@@ -151,101 +154,107 @@ async def ingest_document(user_id: str, file_path: str, title: str):
     Streaming ingestion: page-by-page parse → chunk → insert.
     The document becomes searchable after the FIRST batch of pages (~2s).
     Works for any file size with constant memory usage.
+    Status transitions: processing → completed (or failed on error).
     """
     print(f"🚀 Starting streaming ingestion for: {title}")
+    document_id = None
 
-    if not supabase:
-        print("❌ Supabase client not initialized. Aborting.")
-        return
-
-    # 1. Create document record FIRST — polling detects it immediately
-    doc_response = supabase.table("documents").insert({
-        "user_id": user_id,
-        "title": title,
-        "content_type": "pdf",
-        "metadata": {"source_file": os.path.basename(file_path)}
-    }).execute()
-    document_id = doc_response.data[0]["id"]
-    print(f"📄 Document record created: {document_id}")
-
-    # 2. Stream pages with PyMuPDF — insert chunks as we go
     try:
-        import fitz
-    except ImportError:
-        print("ERROR: PyMuPDF not installed. Run: pip install pymupdf")
-        return
+        # 1. Create document record FIRST with status='processing'
+        doc_response = supabase.table("documents").insert({
+            "user_id": user_id,
+            "title": title,
+            "content_type": "pdf",
+            "status": "processing",
+            "metadata": {"source_file": os.path.basename(file_path)}
+        }).execute()
+        document_id = doc_response.data[0]["id"]
+        print(f"📄 Document record created: {document_id}")
 
-    PAGES_PER_BATCH = 15   # ~0.1-0.2s per batch → first chunks in DB in <1s
-    CHUNK_SIZE = 1500
-    OVERLAP = 200
-    DB_BATCH = 500
+        # 2. Stream pages with PyMuPDF — insert chunks as we go
+        try:
+            import fitz
+        except ImportError:
+            raise RuntimeError("PyMuPDF not installed. Run: pip install pymupdf")
 
-    doc = fitz.open(file_path)
-    total_pages = len(doc)
-    print(f"📄 {total_pages} pages to process (streaming {PAGES_PER_BATCH} pages/batch)")
+        PAGES_PER_BATCH = 15
+        CHUNK_SIZE = 1500
+        OVERLAP = 200
+        DB_BATCH = 500
 
-    text_buffer = ""   # carry-over for overlap between batches
-    chunk_index = 0
-    total_chunks = 0
+        doc = fitz.open(file_path)
+        total_pages = len(doc)
+        print(f"📄 {total_pages} pages to process (streaming {PAGES_PER_BATCH} pages/batch)")
 
-    for batch_start in range(0, total_pages, PAGES_PER_BATCH):
-        batch_end = min(batch_start + PAGES_PER_BATCH, total_pages)
+        text_buffer = ""
+        chunk_index = 0
+        total_chunks = 0
 
-        # Parse this page batch
-        batch_text = text_buffer
-        for page_num in range(batch_start, batch_end):
-            page_text = doc[page_num].get_text("text", sort=True)
-            if page_text.strip():
-                batch_text += "\n" + page_text
+        for batch_start in range(0, total_pages, PAGES_PER_BATCH):
+            batch_end = min(batch_start + PAGES_PER_BATCH, total_pages)
 
-        batch_text = batch_text.replace("\x00", "")
+            batch_text = text_buffer
+            for page_num in range(batch_start, batch_end):
+                page_text = doc[page_num].get_text("text", sort=True)
+                if page_text.strip():
+                    batch_text += "\n" + page_text
 
-        # Chunk the batch — keep last OVERLAP chars as carry-over for next batch
-        is_last_batch = (batch_end >= total_pages)
-        chunks = chunk_text(batch_text, chunk_size=CHUNK_SIZE, overlap=OVERLAP)
+            batch_text = batch_text.replace("\x00", "")
 
-        if not is_last_batch and len(batch_text) > OVERLAP:
-            text_buffer = batch_text[-OVERLAP:]  # carry tail into next batch
-        else:
-            text_buffer = ""
+            is_last_batch = (batch_end >= total_pages)
+            chunks = chunk_text(batch_text, chunk_size=CHUNK_SIZE, overlap=OVERLAP)
 
-        if not chunks:
-            continue
+            if not is_last_batch and len(batch_text) > OVERLAP:
+                text_buffer = batch_text[-OVERLAP:]
+            else:
+                text_buffer = ""
 
-        # Insert this batch of chunks immediately
-        rows = [
-            {
-                "document_id": document_id,
-                "user_id": user_id,
-                "content": chunk,
-                "chunk_index": chunk_index + i,
-            }
-            for i, chunk in enumerate(chunks)
-        ]
-        for i in range(0, len(rows), DB_BATCH):
-            supabase.table("document_chunks").insert(rows[i:i + DB_BATCH]).execute()
+            if not chunks:
+                continue
 
-        chunk_index += len(chunks)
-        total_chunks += len(chunks)
+            rows = [
+                {
+                    "document_id": document_id,
+                    "user_id": user_id,
+                    "content": chunk,
+                    "chunk_index": chunk_index + i,
+                }
+                for i, chunk in enumerate(chunks)
+            ]
+            for i in range(0, len(rows), DB_BATCH):
+                supabase.table("document_chunks").insert(rows[i:i + DB_BATCH]).execute()
 
-        pct = int(batch_end / total_pages * 100)
-        print(f"   ✅ Pages {batch_start+1}-{batch_end}/{total_pages} ({pct}%) → {total_chunks} chunks indexed")
+            chunk_index += len(chunks)
+            total_chunks += len(chunks)
 
-    doc.close()
-    print(f"✅ Phase 1 done — {total_chunks} chunks stored. Document fully searchable!")
+            pct = int(batch_end / total_pages * 100)
+            print(f"   ✅ Pages {batch_start+1}-{batch_end}/{total_pages} ({pct}%) → {total_chunks} chunks indexed")
 
-    # 3. Phase 2 — Embeddings in background (same process, non-blocking for user)
-    generate_and_store_embeddings(document_id)
+        doc.close()
+        print(f"✅ Phase 1 done — {total_chunks} chunks stored. Document fully searchable!")
 
-    print(f"🎉 Ingestion completed for {title}! ({total_chunks} chunks, embeddings done)")
+        # 3. Phase 2 — Embeddings
+        generate_and_store_embeddings(document_id)
 
-    # 4. Cleanup — remove temp file to prevent disk exhaustion
-    try:
-        if os.path.exists(file_path):
-            os.remove(file_path)
-            print(f"🗑️ Temp file removed: {file_path}")
-    except OSError as e:
-        print(f"⚠️ Could not remove temp file {file_path}: {e}")
+        # 4. Mark as completed
+        set_document_status(document_id, "completed")
+        print(f"🎉 Ingestion completed for {title}! ({total_chunks} chunks, embeddings done)")
+
+    except Exception as e:
+        error_str = str(e)
+        print(f"❌ Ingestion failed for {title}: {error_str}", file=sys.stderr)
+        if document_id:
+            set_document_status(document_id, "failed", error_str)
+        sys.exit(1)
+
+    finally:
+        # Always clean up temp file
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"🗑️ Temp file removed: {file_path}")
+        except OSError as e:
+            print(f"⚠️ Could not remove temp file {file_path}: {e}", file=sys.stderr)
 
 
 async def main():
@@ -267,14 +276,16 @@ async def main():
         generate_and_store_embeddings(document_id)
         return
 
-    # Legacy mode: <user_uuid> <path_to_file>
+    # Default mode: <user_uuid> <path_to_file>
     if len(sys.argv) < 3:
         print("Usage: ./venv/bin/python src/features/ai/scripts/ingest_pipeline.py <user_uuid> <path_to_file>")
         sys.exit(1)
 
     user_id = sys.argv[1]
     file_path = sys.argv[2]
-    title = os.path.basename(file_path)
+    # Strip UUID prefix added by upload route (e.g. "uuid-filename.pdf" → "filename.pdf")
+    raw_name = os.path.basename(file_path)
+    title = raw_name[37:] if len(raw_name) > 37 and raw_name[36] == '-' else raw_name
 
     await ingest_document(user_id=user_id, file_path=file_path, title=title)
 

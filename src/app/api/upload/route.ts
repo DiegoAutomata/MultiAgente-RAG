@@ -5,6 +5,7 @@ import { join } from 'path';
 import path from 'path';
 import { randomUUID } from 'crypto';
 import { createClient } from '@/lib/supabase/server';
+import { rateLimit } from '@/lib/rate-limit';
 
 export const runtime = 'nodejs';
 export const maxDuration = 30;
@@ -19,10 +20,29 @@ export async function POST(req: Request) {
     }
     const userId = user.id;
 
+    // Rate limit: max 5 uploads per user per hour
+    const rl = rateLimit(`upload:${userId}`, 5, 60 * 60 * 1000);
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: 'Límite de subidas alcanzado. Máximo 5 documentos por hora.' },
+        { status: 429 }
+      );
+    }
+
     const formData = await req.formData();
     const file = formData.get('file') as File;
     if (!file) {
       return NextResponse.json({ error: 'Missing file' }, { status: 400 });
+    }
+
+    // Validate file type and size (max 200MB)
+    const MAX_SIZE = 200 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      return NextResponse.json({ error: 'Archivo demasiado grande. Máximo 200MB.' }, { status: 413 });
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (!['pdf', 'txt'].includes(ext ?? '')) {
+      return NextResponse.json({ error: 'Solo se permiten archivos PDF o TXT.' }, { status: 415 });
     }
 
     // Save file to /tmp with UUID prefix to prevent race conditions on same filename
