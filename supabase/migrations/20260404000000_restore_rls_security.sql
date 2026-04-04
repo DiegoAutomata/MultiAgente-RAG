@@ -48,8 +48,11 @@ ON document_chunks FOR DELETE TO authenticated USING (auth.uid() = user_id);
 
 -- Note: service_role key bypasses RLS automatically — no explicit policy needed.
 
--- 5. Update hybrid search RPC to accept and filter by user_id at DB level.
---    This replaces the old post-filter approach in TypeScript.
+-- 5. Drop ALL existing versions of the function (avoids "not unique" error)
+DROP FUNCTION IF EXISTS match_document_chunks_hybrid(text, vector, integer, float, float, integer);
+DROP FUNCTION IF EXISTS match_document_chunks_hybrid(text, vector, integer, float, float, integer, uuid);
+
+-- 6. Create updated hybrid search RPC with user_id filter at DB level.
 CREATE OR REPLACE FUNCTION match_document_chunks_hybrid(
   query_text TEXT,
   query_embedding vector(384),

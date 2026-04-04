@@ -60,33 +60,26 @@ export async function performHybridSearch(
     }
   }
 
-  // Strategy 1: Try the RPC function, then post-filter by user's docs
+  // Strategy 1: RPC with DB-level user filtering via filter_user_id
   try {
     const { data, error } = await supabase.rpc("match_document_chunks_hybrid", {
       query_text: queryText,
       query_embedding: queryEmbedding,
-      match_count: matchCount * 3, // fetch extra to allow for user filtering
+      match_count: matchCount,
       full_text_weight: 1.0,
       semantic_weight: 1.0,
       rrf_k: 50,
+      filter_user_id: userId ?? null,
     });
 
     if (!error && data && data.length > 0) {
-      const filtered = userDocIds
-        ? data.filter((r: { document_id: string }) => userDocIds!.includes(r.document_id))
-        : data;
-
-      if (filtered.length > 0) {
-        console.log(`[search] RPC returned ${filtered.length} results (user-filtered)`);
-        return filtered.slice(0, matchCount) as Array<{
-          id: string;
-          document_id: string;
-          content: string;
-          similarity: number;
-        }>;
-      }
-
-      console.warn("[search] RPC returned results but none belong to this user");
+      console.log(`[search] RPC returned ${data.length} results`);
+      return data as Array<{
+        id: string;
+        document_id: string;
+        content: string;
+        similarity: number;
+      }>;
     }
 
     if (error) {
