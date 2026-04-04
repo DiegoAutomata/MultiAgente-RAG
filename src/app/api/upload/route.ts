@@ -3,6 +3,7 @@ import { spawn } from 'child_process';
 import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import path from 'path';
+import { randomUUID } from 'crypto';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
@@ -24,10 +25,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing file' }, { status: 400 });
     }
 
-    // Save file to /tmp
+    // Save file to /tmp with UUID prefix to prevent race conditions on same filename
     const buffer = Buffer.from(await file.arrayBuffer());
-    const safeName = file.name.replace(/\s+/g, '_');
-    const tempPath = join('/tmp', safeName);
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const tempPath = join('/tmp', `${randomUUID()}-${safeName}`);
     await writeFile(tempPath, buffer);
 
     console.log(`[upload] Saved ${safeName} (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Launching full ingest pipeline...`);

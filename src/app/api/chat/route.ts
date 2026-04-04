@@ -110,15 +110,17 @@ FORMATO DE RESPUESTA:
         }),
         execute: async () => {
           console.log('[chat] list_documents called');
-          const { performHybridSearch } = await import('@/features/ai/services/supabase-vector');
-          // We can't use performHybridSearch directly since it's for chunks. 
-          // We need a simple query to documents table.
           const { createClient } = await import('@supabase/supabase-js');
           const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
           const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
           const supabase = createClient(url!, serviceKey!);
-          const { data, error } = await supabase.from('documents').select('title, created_at').order('created_at', { ascending: false }).limit(5);
-          
+          const { data, error } = await supabase
+            .from('documents')
+            .select('title, created_at')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(10);
+
           if (error) return { error: error.message };
           return {
              status: 'success',

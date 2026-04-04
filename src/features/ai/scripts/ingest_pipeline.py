@@ -11,10 +11,8 @@ try:
 except ImportError:
     LlamaParse = None
 
-try:
-    import voyageai
-except ImportError:
-    voyageai = None
+# Voyage AI intentionally disabled — embedding model must match the query embedder (all-MiniLM-L6-v2, 384-dim)
+voyageai = None
 
 # Load environment variables (from .env or .env.local)
 load_dotenv(".env.local")
@@ -31,13 +29,6 @@ else:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 
-def get_voyage_client():
-    if not voyageai:
-        return None
-    api_key = os.getenv("VOYAGE_API_KEY")
-    if not api_key:
-        return None
-    return voyageai.Client(api_key=api_key)
 
 
 def parse_pdf_fast(file_path: str) -> str:
@@ -133,26 +124,17 @@ def generate_and_store_embeddings(document_id: str):
     ids = [r["id"] for r in rows.data]
     print(f"🧠 Generating embeddings for {len(chunks)} chunks...")
 
-    voyage_client = get_voyage_client()
     embeddings: list = []
 
-    if voyage_client:
-        VOYAGE_BATCH = 128
-        for i in range(0, len(chunks), VOYAGE_BATCH):
-            batch = chunks[i:i + VOYAGE_BATCH]
-            result = voyage_client.embed(texts=batch, model="voyage-3", input_type="document")
-            embeddings.extend(result.embeddings)
-        print(f"   ✅ {len(embeddings)} embeddings via Voyage AI")
-    else:
-        try:
-            from sentence_transformers import SentenceTransformer
-            local_embedder = SentenceTransformer("all-MiniLM-L6-v2")
-            batch_embeddings = local_embedder.encode(chunks, batch_size=64, show_progress_bar=False)
-            embeddings = [vec.tolist() for vec in batch_embeddings]
-            print(f"   ✅ {len(embeddings)} embeddings via local model")
-        except ImportError:
-            print("⚠️ sentence-transformers not installed. Skipping embeddings.")
-            return
+    try:
+        from sentence_transformers import SentenceTransformer
+        local_embedder = SentenceTransformer("all-MiniLM-L6-v2")
+        batch_embeddings = local_embedder.encode(chunks, batch_size=64, show_progress_bar=False)
+        embeddings = [vec.tolist() for vec in batch_embeddings]
+        print(f"   ✅ {len(embeddings)} embeddings via local model")
+    except ImportError:
+        print("⚠️ sentence-transformers not installed. Skipping embeddings.")
+        return
 
     # Update each chunk with its embedding
     for chunk_id, emb in zip(ids, embeddings):
@@ -256,6 +238,14 @@ async def ingest_document(user_id: str, file_path: str, title: str):
     generate_and_store_embeddings(document_id)
 
     print(f"🎉 Ingestion completed for {title}! ({total_chunks} chunks, embeddings done)")
+
+    # 4. Cleanup — remove temp file to prevent disk exhaustion
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            print(f"🗑️ Temp file removed: {file_path}")
+    except OSError as e:
+        print(f"⚠️ Could not remove temp file {file_path}: {e}")
 
 
 async def main():
