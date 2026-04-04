@@ -6,12 +6,11 @@ import path from 'path';
 import { createClient } from '@/lib/supabase/server';
 
 export const runtime = 'nodejs';
-export const maxDuration = 300;
+export const maxDuration = 30;
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: Request) {
   try {
-    // Validate session before processing anything
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -21,7 +20,6 @@ export async function POST(req: Request) {
 
     const formData = await req.formData();
     const file = formData.get('file') as File;
-
     if (!file) {
       return NextResponse.json({ error: 'Missing file' }, { status: 400 });
     }
@@ -32,26 +30,26 @@ export async function POST(req: Request) {
     const tempPath = join('/tmp', safeName);
     await writeFile(tempPath, buffer);
 
-    console.log(`[upload] Saved file to ${tempPath}. Launching ingestion pipeline in background...`);
+    console.log(`[upload] Saved ${safeName} (${(buffer.length / 1024 / 1024).toFixed(1)}MB). Launching full ingest pipeline...`);
 
-    // Resolve project root so the script path is always correct regardless of CWD
     const projectRoot = path.resolve(process.cwd());
     const scriptPath = join(projectRoot, 'src/features/ai/scripts/ingest_pipeline.py');
     const pythonBin = process.env.PYTHON_BIN || '/home/diego/.venvs/saas-rag/bin/python';
 
-    // Spawn detached so it survives beyond the HTTP response
+    // Launch full pipeline in background: parse (pdfplumber) + chunk + insert + embeddings
     const child = spawn(pythonBin, [scriptPath, userId, tempPath], {
       detached: true,
       stdio: 'ignore',
       cwd: projectRoot,
     });
-    child.unref(); // Allow Node to exit without waiting for this child
+    child.unref();
 
-    console.log(`[upload] Ingestion process launched (PID ${child.pid}). Returning 200 immediately.`);
+    console.log(`[upload] Pipeline PID ${child.pid} launched. Returning 200 immediately.`);
 
     return NextResponse.json({
       success: true,
-      message: 'Document received and indexing in background. This takes 2-5 minutes.',
+      filename: safeName,
+      message: 'Document received. Indexing in background (~1 min for large files).',
     });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);

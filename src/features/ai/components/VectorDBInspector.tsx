@@ -2,13 +2,25 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { useRagStore } from "../store/rag-store";
-import { DatabaseZap, Loader2, FileText } from "lucide-react";
+import { DatabaseZap, FileText } from "lucide-react";
 import { useState, useEffect, useMemo } from "react";
 
 interface DocumentMeta {
   id: string;
   title: string;
   created_at: string;
+}
+
+// Deterministic chunk positions seeded by index
+function seededChunks(count: number) {
+  return Array.from({ length: count }).map((_, i) => {
+    const seed = (i * 2654435761) >>> 0;
+    return {
+      id: i,
+      x: ((seed % 8500) / 100) + 5,
+      y: (((seed >> 8) % 7500) / 100) + 10,
+    };
+  });
 }
 
 export function VectorDBInspector() {
@@ -18,10 +30,10 @@ export function VectorDBInspector() {
   const [documents, setDocuments] = useState<DocumentMeta[]>([]);
   const [docCount, setDocCount] = useState(0);
 
-  // Fetch real document count from the API
-  useEffect(() => {
-    if (!documentUploaded && !isUploadingDocument) return;
+  const hasData = documentUploaded || isUploadingDocument;
 
+  useEffect(() => {
+    if (!hasData) return;
     fetch("/api/documents")
       .then(r => r.ok ? r.json() : { documents: [] })
       .then(data => {
@@ -30,26 +42,23 @@ export function VectorDBInspector() {
         setDocCount(docs.length);
       })
       .catch(() => setDocCount(0));
-  }, [documentUploaded, isUploadingDocument]);
+  }, [hasData]);
 
-  // Generate chunk scatter plot — seeded from document count so it's reproducible
-  const chunks = useMemo(() => {
-    if (!documentUploaded && !isUploadingDocument) return [];
-    const count = Math.min(45, Math.max(12, docCount * 8));
-    return Array.from({ length: count }).map((_, i) => {
-      // Deterministic pseudo-random positions based on index
-      const seed = (i * 2654435761) >>> 0;
-      return {
-        id: i,
-        x: ((seed % 8500) / 100) + 5,
-        y: (((seed >> 8) % 8000) / 100) + 10,
-      };
-    });
-  }, [documentUploaded, isUploadingDocument, docCount]);
+  // Idle ghost chunks — always shown, dimmed
+  const idleChunks = useMemo(() => seededChunks(10), []);
+
+  // Active chunks — shown when data exists
+  const activeChunks = useMemo(() => {
+    if (!hasData) return [];
+    const count = Math.min(40, Math.max(12, docCount * 8));
+    return seededChunks(count);
+  }, [hasData, docCount]);
+
+  const chunks = hasData ? activeChunks : idleChunks;
 
   const connections = useMemo(() => {
     const lines: { id: string; x1: number; y1: number; x2: number; y2: number; thickness: number; opacity: number }[] = [];
-    if (isUploadingDocument) return lines;
+    if (!hasData) return lines;
     for (let i = 0; i < chunks.length; i++) {
       for (let j = i + 1; j < chunks.length; j++) {
         const dx = chunks[i].x - chunks[j].x;
@@ -61,64 +70,68 @@ export function VectorDBInspector() {
             id: `${i}-${j}`,
             x1: chunks[i].x, y1: chunks[i].y,
             x2: chunks[j].x, y2: chunks[j].y,
-            thickness: Math.max(0.2, similarity * 2),
-            opacity: Math.max(0.05, similarity * 0.4),
+            thickness: Math.max(0.2, similarity * 1.5),
+            opacity: Math.max(0.04, similarity * 0.3),
           });
         }
       }
     }
     return lines;
-  }, [chunks, isUploadingDocument]);
-
-  if (!documentUploaded && !isUploadingDocument) return null;
+  }, [chunks, hasData]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, height: 0, y: -20 }}
-      animate={{ opacity: 1, height: "auto", y: 0 }}
-      transition={{ duration: 0.5, type: "spring", bounce: 0.4 }}
-      className="bg-zinc-900/50 backdrop-blur-md border border-teal-900/30 rounded-2xl p-5 shadow-inner mt-4 overflow-hidden relative"
-    >
-      <div className="flex items-center justify-between mb-4 relative z-10">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-teal-500/20 rounded-lg">
-            <DatabaseZap size={20} className="text-teal-400" />
+    <div className="bg-zinc-900/50 border border-white/5 rounded-2xl p-4 overflow-hidden relative">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <div className={`p-1.5 rounded-lg transition-colors ${hasData ? "bg-teal-500/20" : "bg-zinc-800"}`}>
+            <DatabaseZap size={14} className={hasData ? "text-teal-400" : "text-zinc-600"} />
           </div>
           <div>
-            <h4 className="text-white font-bold text-sm">Base de Datos Vectorial</h4>
-            <p className="text-[11px] text-zinc-400 font-mono">Indexación Matemática Multidimensional</p>
+            <h4 className="text-xs font-bold text-white uppercase font-mono tracking-tight">Base de Datos Vectorial</h4>
+            <p className="text-[9px] text-zinc-600 font-mono">Indexación Multidimensional</p>
           </div>
         </div>
 
-        {/* Real document count badge */}
-        {docCount > 0 && (
-          <div className="flex items-center gap-1.5 bg-teal-500/10 border border-teal-500/20 px-3 py-1 rounded-full">
-            <FileText size={11} className="text-teal-400" />
-            <span className="text-teal-400 text-xs font-mono font-semibold">
-              {docCount} {docCount === 1 ? "documento" : "documentos"}
+        {docCount > 0 ? (
+          <div className="flex items-center gap-1 bg-teal-500/10 border border-teal-500/20 px-2 py-0.5 rounded-full">
+            <FileText size={9} className="text-teal-400" />
+            <span className="text-teal-400 text-[9px] font-mono font-bold">
+              {docCount} doc{docCount !== 1 ? "s" : ""}
             </span>
           </div>
+        ) : (
+          <span className="text-[9px] font-mono text-zinc-700 uppercase tracking-wide">Vacía</span>
         )}
       </div>
 
-      {isUploadingDocument && (
-        <div className="flex items-center gap-3 bg-teal-500/10 border border-teal-500/20 px-3 py-2 rounded-xl text-teal-400 text-xs font-mono font-medium mb-4 relative z-10 w-max">
-          <Loader2 size={14} className="animate-spin" />
-          <p>Indexando documento y estructurando topología multidimensional...</p>
-        </div>
-      )}
+      {/* Scatter plot — always visible */}
+      <div className={`relative w-full h-[180px] rounded-xl overflow-hidden transition-all duration-500 ${
+        hasData
+          ? "bg-black/70 border border-teal-500/20 shadow-[0_0_20px_rgba(20,184,166,0.08)]"
+          : "bg-black/40 border border-zinc-800/60"
+      }`}>
 
-      {/* 2D scatter plot of vector chunks */}
-      <div className="relative w-full min-h-[400px] bg-black/60 border border-teal-500/30 rounded-2xl overflow-hidden group shadow-[0_0_40px_rgba(20,184,166,0.1)] flex-1">
+        {/* Gridlines */}
+        <div
+          className={`absolute inset-0 transition-opacity duration-500 ${hasData ? "opacity-[0.04]" : "opacity-[0.015]"}`}
+          style={{ backgroundImage: "linear-gradient(#14b8a6 1px, transparent 1px), linear-gradient(90deg, #14b8a6 1px, transparent 1px)", backgroundSize: "15px 15px" }}
+        />
 
-        {/* Grid gridlines */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "linear-gradient(#14b8a6 1px, transparent 1px), linear-gradient(90deg, #14b8a6 1px, transparent 1px)", backgroundSize: "15px 15px" }} />
+        {/* Axis lines */}
+        <div className={`absolute left-1/2 top-0 bottom-0 w-px transition-opacity ${hasData ? "bg-teal-500/10" : "bg-zinc-800/30"}`} />
+        <div className={`absolute top-1/2 left-0 right-0 h-px transition-opacity ${hasData ? "bg-teal-500/10" : "bg-zinc-800/30"}`} />
 
-        {/* Axis Lines */}
-        <div className="absolute left-1/2 top-0 bottom-0 w-[1px] bg-teal-500/10" />
-        <div className="absolute top-1/2 left-0 right-0 h-[1px] bg-teal-500/10" />
+        {/* Idle overlay label */}
+        {!hasData && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <p className="text-[10px] text-zinc-700 font-mono text-center">
+              Sube un documento<br />para indexar vectores
+            </p>
+          </div>
+        )}
 
-        {/* SVG connections */}
+        {/* Connection lines */}
         <svg className="absolute inset-0 w-full h-full pointer-events-none">
           <AnimatePresence>
             {connections.map(c => (
@@ -126,6 +139,7 @@ export function VectorDBInspector() {
                 key={c.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: c.opacity }}
+                exit={{ opacity: 0 }}
                 x1={`${c.x1}%`} y1={`${c.y1}%`}
                 x2={`${c.x2}%`} y2={`${c.y2}%`}
                 stroke="#14b8a6"
@@ -135,58 +149,63 @@ export function VectorDBInspector() {
           </AnimatePresence>
         </svg>
 
-        {/* Chunk nodes */}
+        {/* Chunk dots */}
         {chunks.map((chunk) => (
           <motion.div
             key={chunk.id}
-            initial={isUploadingDocument ? { scale: 0, opacity: 0 } : { scale: 1, opacity: 1 }}
+            initial={{ scale: 0, opacity: 0 }}
             animate={
               hoveredChunk === chunk.id
-                ? { scale: 1.5, opacity: 1, zIndex: 10 }
-                : { scale: 1, opacity: 0.6, y: [0, -3, 0] }
+                ? { scale: 2, opacity: 1 }
+                : hasData
+                ? { scale: 1, opacity: 0.6, y: [0, -2, 0] }
+                : { scale: 1, opacity: 0.15 }
             }
             transition={
               hoveredChunk === chunk.id
                 ? { duration: 0.2 }
-                : { delay: isUploadingDocument ? chunk.id * 0.04 : 0, y: { repeat: Infinity, duration: 2 + (chunk.id % 3), ease: "easeInOut" } }
+                : hasData
+                ? { delay: chunk.id * 0.02, y: { repeat: Infinity, duration: 2 + (chunk.id % 3), ease: "easeInOut" } }
+                : { delay: chunk.id * 0.05 }
             }
-            onMouseEnter={() => setHoveredChunk(chunk.id)}
+            onMouseEnter={() => hasData && setHoveredChunk(chunk.id)}
             onMouseLeave={() => setHoveredChunk(null)}
-            className={`absolute w-3 h-3 rounded-full cursor-crosshair transform -translate-x-1/2 -translate-y-1/2 ${hoveredChunk === chunk.id ? "bg-white shadow-[0_0_15px_#fff]" : "bg-teal-500 shadow-[0_0_8px_#14b8a6]"}`}
+            className={`absolute w-2 h-2 rounded-full transform -translate-x-1/2 -translate-y-1/2 transition-colors ${
+              hoveredChunk === chunk.id
+                ? "bg-white shadow-[0_0_10px_#fff] cursor-crosshair"
+                : hasData
+                ? "bg-teal-500 shadow-[0_0_6px_#14b8a6] cursor-crosshair"
+                : "bg-zinc-700"
+            }`}
             style={{ left: `${chunk.x}%`, top: `${chunk.y}%` }}
-          >
-            <span className="absolute -top-4 left-1/2 -translate-x-1/2 text-[9px] text-teal-300/60 pointer-events-none whitespace-nowrap font-mono">#{chunk.id}</span>
-          </motion.div>
+          />
         ))}
 
         {/* Hover tooltip */}
         <AnimatePresence>
           {hoveredChunk !== null && (
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="absolute bottom-2 left-2 right-2 bg-zinc-950/90 border border-teal-500/30 p-3 rounded-lg flex items-start gap-3 shadow-lg pointer-events-none z-20"
+              className="absolute bottom-1.5 left-1.5 right-1.5 bg-zinc-950/95 border border-teal-500/30 px-2.5 py-1.5 rounded-lg pointer-events-none z-20 flex items-center gap-2"
             >
-              <DatabaseZap size={14} className="text-teal-400 mt-0.5 shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs text-white font-medium">Fragmento #{hoveredChunk} — Chunk vectorial indexado</p>
-                <p className="text-[10px] text-teal-400/70 font-mono mt-1">
-                  {documents[0]?.title ? `Doc: ${documents[0].title}` : "Fragmento de documento procesado"}
-                </p>
-              </div>
+              <DatabaseZap size={10} className="text-teal-400 shrink-0" />
+              <p className="text-[10px] text-zinc-300 font-mono truncate">
+                Chunk #{hoveredChunk} · {documents[0]?.title ?? "documento indexado"}
+              </p>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {!isUploadingDocument && (
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8 }} className="mt-4 flex items-center justify-center p-2 bg-teal-500/10 rounded-lg border border-teal-500/20">
-          <p className="text-xs text-teal-400 font-medium">
-            Motor de Búsqueda Híbrida: <span className="text-white">Activo · {chunks.length} fragmentos visualizados</span>
-          </p>
-        </motion.div>
-      )}
-    </motion.div>
+      {/* Footer status */}
+      <div className="mt-2 flex items-center justify-between">
+        <p className="text-[9px] font-mono text-zinc-700 uppercase tracking-wide">
+          {hasData ? `Motor híbrido · ${chunks.length} fragmentos` : "Motor híbrido · en espera"}
+        </p>
+        <div className={`w-1.5 h-1.5 rounded-full transition-colors ${hasData ? "bg-teal-500 animate-pulse" : "bg-zinc-800"}`} />
+      </div>
+    </div>
   );
 }

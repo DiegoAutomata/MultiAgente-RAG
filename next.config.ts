@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     '*': ['./venv/**'],
   },
+  // Keep heavy native/CJS modules out of Turbopack bundle so require() works correctly
+  serverExternalPackages: ['pdf-parse', '@xenova/transformers'],
 }
 
 export default nextConfig

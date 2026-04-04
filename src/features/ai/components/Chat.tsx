@@ -87,18 +87,25 @@ export function Chat() {
   }
 
   return (
-    <div className="flex flex-col w-full max-w-4xl mx-auto h-[80vh] bg-zinc-950 text-white rounded-3xl shadow-2xl border border-zinc-900 shadow-teal-900/10 overflow-hidden relative">
+    <div className="flex flex-col w-full h-full bg-zinc-950/80 text-white rounded-2xl shadow-2xl border border-white/5 overflow-hidden relative">
       <div
         ref={scrollContainerRef}
         className="flex-1 overflow-y-auto p-6 space-y-6 scrollbar-thin scrollbar-thumb-zinc-800 scrollbar-track-transparent"
       >
         {messages.length === 0 && (
-          <div className="h-full flex flex-col items-center justify-center text-center mt-4">
-             <div className="w-16 h-16 bg-teal-500/10 rounded-2xl flex items-center justify-center border border-teal-500/20 mb-6 backdrop-blur-md shadow-[0_0_30px_rgba(20,184,166,0.15)]">
-                 <Bot size={32} className="text-teal-400" />
-             </div>
-             <h2 className="text-2xl font-bold text-white mb-2 tracking-tight" suppressHydrationWarning>Enterprise RAG Auditor</h2>
-             <p className="text-zinc-400 max-w-sm text-sm" suppressHydrationWarning>Auditoría inteligente sobre repositorio B2B. Escribe tu primera consulta abajo para iniciar.</p>
+          <div className="h-full flex flex-col items-center justify-center text-center gap-5">
+            <div className="relative">
+              <div className="absolute inset-0 rounded-2xl bg-teal-500/20 blur-2xl scale-150" />
+              <div className="relative w-16 h-16 bg-gradient-to-br from-teal-500/20 to-emerald-500/10 rounded-2xl flex items-center justify-center border border-teal-500/30 shadow-[0_0_40px_rgba(20,184,166,0.2)]">
+                <Bot size={30} className="text-teal-400" />
+              </div>
+            </div>
+            <div suppressHydrationWarning>
+              <h2 className="text-xl font-bold text-white tracking-tight mb-1">Listo para analizar</h2>
+              <p className="text-zinc-500 max-w-xs text-sm leading-relaxed">
+                Sube un documento en el panel izquierdo y luego haz preguntas sobre su contenido.
+              </p>
+            </div>
           </div>
         )}
 
@@ -197,7 +204,7 @@ export function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="p-4 border-t border-zinc-900 bg-zinc-950/90 backdrop-blur-xl relative z-10">
+      <div className="px-4 py-3 border-t border-white/5 bg-zinc-950/80 backdrop-blur-xl relative z-10">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -205,13 +212,13 @@ export function Chat() {
             sendMessage({ text: input });
             setInput('');
           }}
-          className="flex gap-3"
+          className="flex gap-2 items-center bg-zinc-900/80 border border-white/8 rounded-2xl px-4 py-2 focus-within:border-teal-500/40 focus-within:shadow-[0_0_20px_rgba(20,184,166,0.08)] transition-all"
         >
           <input
             name="chat-input"
-            className="flex-1 bg-zinc-900 border border-zinc-800 text-white px-5 py-4 rounded-2xl focus:outline-none focus:ring-2 focus:ring-teal-500/50 transition-all font-sans placeholder:text-zinc-500 shadow-inner"
+            className="flex-1 bg-transparent text-white py-2 focus:outline-none font-sans placeholder:text-zinc-600 text-sm"
             value={input}
-            placeholder="Pregunta sobre las normas, reportes o analízalas..."
+            placeholder="Consulta normas, límites de velocidad, regulaciones..."
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -225,11 +232,12 @@ export function Chat() {
           <button
             type="submit"
             disabled={isLoading}
-            className="px-8 py-4 bg-teal-500 min-w-[120px] text-zinc-950 font-bold tracking-tight rounded-2xl hover:bg-teal-400 focus:scale-95 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-[0_0_20px_rgba(20,184,166,0.3)] hover:shadow-[0_0_30px_rgba(20,184,166,0.5)]"
+            className="shrink-0 px-5 py-2 bg-teal-500 text-black text-sm font-bold rounded-xl hover:bg-teal-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-[0_0_16px_rgba(20,184,166,0.25)] hover:shadow-[0_0_24px_rgba(20,184,166,0.4)]"
           >
-            Preguntar
+            {isLoading ? "..." : "Enviar"}
           </button>
         </form>
+        <p className="text-center text-[10px] text-zinc-700 mt-1.5 font-mono">Enter para enviar · Respuestas basadas exclusivamente en tus documentos</p>
       </div>
     </div>
   );

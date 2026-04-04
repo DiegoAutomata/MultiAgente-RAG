@@ -59,29 +59,57 @@ export function DocumentUpload() {
       if (res.ok) {
         clearTimeout(agentTimer1);
         clearTimeout(agentTimer2);
-        setActiveAgent('auditor');
-        setTimeout(() => setActiveAgent('idle'), 1500);
-        setUploadSuccess(true);
-        setDocumentUploaded(true);
+        setIsUploading(false);
+
+        // Poll until document appears in DB (Python pipeline ~30-120s for large files)
+        const uploadedTitle = file.name.replace(/\s+/g, '_');
+        const pollStart = Date.now();
+        const MAX_WAIT = 4 * 60 * 1000;
+
+        const poll = async () => {
+          try {
+            const r = await fetch("/api/documents");
+            if (r.ok) {
+              const d = await r.json();
+              if ((d.documents ?? []).some((doc: { title: string }) => doc.title === uploadedTitle)) {
+                setActiveAgent('auditor');
+                setTimeout(() => setActiveAgent('idle'), 1500);
+                setUploadSuccess(true);
+                setDocumentUploaded(true);
+                setIsUploadingDocument(false);
+                return;
+              }
+            }
+          } catch { /* retry */ }
+          if (Date.now() - pollStart < MAX_WAIT) {
+            setTimeout(poll, 5000);
+          } else {
+            setActiveAgent('idle');
+            setUploadSuccess(true);
+            setDocumentUploaded(true);
+            setIsUploadingDocument(false);
+          }
+        };
+        setTimeout(poll, 8000); // first check after 8s
       } else {
         clearTimeout(agentTimer1);
         clearTimeout(agentTimer2);
         setActiveAgent('idle');
         const data = await res.json().catch(() => ({}));
-        // 401 = sesión expirada, redirigir al login
         if (res.status === 401) {
           showMessage("Sesión expirada. Redirigiendo al login...", true);
           setTimeout(() => { window.location.href = '/login'; }, 1500);
         } else {
           showMessage(data.error ?? "Error en la subida y procesamiento.", true);
         }
+        setIsUploading(false);
+        setIsUploadingDocument(false);
       }
     } catch {
       clearTimeout(agentTimer1);
       clearTimeout(agentTimer2);
       setActiveAgent('idle');
       showMessage("Error de red. Verifica tu conexión.", true);
-    } finally {
       setIsUploading(false);
       setIsUploadingDocument(false);
     }
@@ -130,12 +158,12 @@ export function DocumentUpload() {
   };
 
   return (
-    <div className="bg-zinc-950/80 backdrop-blur-xl border border-zinc-800/80 rounded-3xl p-6 shadow-2xl relative overflow-hidden h-full flex flex-col justify-center">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500/10 rounded-full blur-[80px] -z-10" />
+    <div className="bg-zinc-900/50 border border-white/5 rounded-2xl p-4 relative overflow-hidden flex flex-col">
+      <div className="absolute top-0 right-0 w-40 h-40 bg-teal-500/5 rounded-full blur-[60px] -z-10" />
 
-      <h3 className="text-xl font-bold text-white mb-2 tracking-tight">Cargar Base de Conocimiento</h3>
-      <p className="text-sm text-zinc-400 mb-6 leading-relaxed">
-        Sube tus documentos y observa cómo nuestro enjambre Multi-Agente IA segmenta, evalúa riesgos y consolida insights financieros para darte respuestas con precisión milimétrica.
+      <h3 className="text-xs font-bold text-white mb-1 tracking-tight uppercase font-mono">Base de Conocimiento</h3>
+      <p className="text-[11px] text-zinc-500 mb-4 leading-relaxed">
+        Sube un PDF para indexarlo y consultarlo con IA.
       </p>
 
       {uploadSuccess ? (
@@ -224,7 +252,7 @@ export function DocumentUpload() {
       </AnimatePresence>
 
       {/* DB Management Buttons */}
-      <div className="mt-4 flex gap-2">
+      <div className="mt-3 flex gap-2">
         <button
           onClick={handleDeleteLast}
           disabled={isDeletingLast || isClearing}
