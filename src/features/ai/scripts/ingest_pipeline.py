@@ -2,17 +2,7 @@ import os
 import asyncio
 import sys
 from dotenv import load_dotenv
-
-# Import SDKs
 from supabase import create_client, Client
-
-try:
-    from llama_parse import LlamaParse
-except ImportError:
-    LlamaParse = None
-
-# Voyage AI intentionally disabled — embedding model must match the query embedder (all-MiniLM-L6-v2, 384-dim)
-voyageai = None
 
 # Load environment variables (from .env or .env.local)
 load_dotenv(".env.local")
@@ -76,25 +66,6 @@ def parse_pdf_fast(file_path: str) -> str:
             text += page_text + "\n"
     return text
 
-
-async def parse_pdf(file_path: str) -> str:
-    """Uses LlamaParse if key available, otherwise PyMuPDF (table-aware)."""
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"PDF missing: {file_path}")
-
-    if file_path.endswith('.txt'):
-        with open(file_path, 'r', encoding='utf-8') as f:
-            return f.read()
-
-    llama_key = os.getenv("LLAMA_CLOUD_API_KEY")
-    if llama_key and LlamaParse:
-        parser = LlamaParse(api_key=llama_key, result_type="markdown", verbose=True)
-        print(f"Parsing {file_path} via LlamaParse...")
-        documents = await asyncio.to_thread(parser.load_data, file_path)
-        return "\n\n".join([doc.text for doc in documents])
-
-    print("INFO: Using PyMuPDF (table-aware parser).")
-    return parse_pdf_fast(file_path)
 
 
 def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 200) -> list[str]:

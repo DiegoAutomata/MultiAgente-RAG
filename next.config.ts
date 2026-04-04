@@ -11,6 +11,41 @@ const nextConfig: NextConfig = {
   },
   // Keep heavy native/CJS modules out of Turbopack bundle so require() works correctly
   serverExternalPackages: ['pdf-parse', '@xenova/transformers'],
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          // Prevent clickjacking — page can't be embedded in an iframe
+          { key: 'X-Frame-Options', value: 'DENY' },
+          // Prevent MIME-type sniffing
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          // Force HTTPS for 1 year (only effective when deployed with HTTPS)
+          { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains' },
+          // Stop referrer leaking to third parties
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          // Restrict browser features
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // Content Security Policy
+          {
+            key: 'Content-Security-Policy',
+            value: [
+              "default-src 'self'",
+              // Next.js needs inline scripts + eval in dev; in prod these are nonces — this is pragmatic for now
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              // Supabase API + Anthropic API calls from server-side (fetch) are not restricted by CSP
+              // Only browser-initiated requests matter here
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+              "img-src 'self' data: blob:",
+              "font-src 'self'",
+              "frame-ancestors 'none'",
+            ].join('; '),
+          },
+        ],
+      },
+    ]
+  },
 }
 
 export default nextConfig

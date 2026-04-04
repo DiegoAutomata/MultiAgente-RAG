@@ -55,7 +55,7 @@ export async function POST(req: Request) {
 
     const projectRoot = path.resolve(process.cwd());
     const scriptPath = join(projectRoot, 'src/features/ai/scripts/ingest_pipeline.py');
-    const pythonBin = process.env.PYTHON_BIN || '/home/diego/.venvs/saas-rag/bin/python';
+    const pythonBin = process.env.PYTHON_BIN || 'python3';
 
     // Launch full pipeline in background: parse (pdfplumber) + chunk + insert + embeddings
     const child = spawn(pythonBin, [scriptPath, userId, tempPath], {
