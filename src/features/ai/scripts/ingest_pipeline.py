@@ -204,11 +204,12 @@ async def ingest_document(user_id: str, file_path: str, title: str):
         doc.close()
         print(f"✅ Phase 1 done — {total_chunks} chunks stored. Document fully searchable!")
 
-        # 3. Phase 2 — Embeddings
-        generate_and_store_embeddings(document_id)
-
-        # 4. Mark as completed
+        # 3. Mark as completed NOW — frontend can proceed, document is searchable
         set_document_status(document_id, "completed")
+        print(f"✅ Document marked as completed. Frontend can now query it.")
+
+        # 4. Phase 2 — Embeddings in background (improves semantic search quality)
+        generate_and_store_embeddings(document_id)
         print(f"🎉 Ingestion completed for {title}! ({total_chunks} chunks, embeddings done)")
 
     except Exception as e:

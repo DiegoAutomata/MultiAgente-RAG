@@ -98,7 +98,7 @@ export function DocumentUpload() {
             setIsUploadingDocument(false);
           }
         };
-        setTimeout(poll, 5000); // first check after 5s
+        setTimeout(poll, 3000); // first check after 3s
       } else {
         clearTimeout(agentTimer1);
         clearTimeout(agentTimer2);
