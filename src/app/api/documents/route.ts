@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-// GET /api/documents — lista los documentos del usuario autenticado
+// GET /api/documents — lista los documentos del usuario autenticado con chunk counts reales
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -13,7 +13,20 @@ export async function GET() {
     .order('created_at', { ascending: false })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ documents: data ?? [] })
+
+  // Fetch chunk counts per document in parallel
+  const docs = data ?? []
+  const docsWithCounts = await Promise.all(
+    docs.map(async (doc) => {
+      const { count } = await supabase
+        .from('document_chunks')
+        .select('id', { count: 'exact', head: true })
+        .eq('document_id', doc.id)
+      return { ...doc, chunk_count: count ?? 0 }
+    })
+  )
+
+  return NextResponse.json({ documents: docsWithCounts })
 }
 
 // DELETE /api/documents — vacía TODOS los documentos del usuario (RLS garantiza solo los suyos)

@@ -66,7 +66,7 @@ FORMATO DE RESPUESTA:
 - La respuesta debe comenzar directamente con el contenido útil para el usuario.`;
 
   const result = streamText({
-    model: anthropic('claude-3-haiku-20240307') as any,
+    model: anthropic('claude-sonnet-4-6') as any,
     system: SYSTEM,
     messages: modelMessages,
     maxTokens: 4096,

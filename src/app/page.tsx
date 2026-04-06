@@ -31,7 +31,9 @@ export default function Home() {
         <div className="hidden md:flex items-center gap-3 text-[11px] font-mono text-zinc-600">
           <span>Engine: <span className="text-zinc-400">Multi-Agent RAG</span></span>
           <span className="text-zinc-800">·</span>
-          <span>Model: <span className="text-zinc-400">Claude 3 Haiku</span></span>
+          <span>Router: <span className="text-zinc-400">Haiku</span></span>
+          <span className="text-zinc-800">·</span>
+          <span>Agentes: <span className="text-zinc-400">Sonnet 4.6</span></span>
         </div>
 
         <div className="flex-1" />

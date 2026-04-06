@@ -9,6 +9,10 @@ interface RagState {
 
   isUploadingDocument: boolean;
   setIsUploadingDocument: (status: boolean) => void;
+
+  // Triggers a re-fetch in VectorDBInspector when updated
+  lastRefreshAt: number;
+  triggerRefresh: () => void;
 }
 
 export const useRagStore = create<RagState>((set) => ({
@@ -20,4 +24,7 @@ export const useRagStore = create<RagState>((set) => ({
 
   isUploadingDocument: false,
   setIsUploadingDocument: (status) => set({ isUploadingDocument: status }),
+
+  lastRefreshAt: 0,
+  triggerRefresh: () => set({ lastRefreshAt: Date.now() }),
 }));

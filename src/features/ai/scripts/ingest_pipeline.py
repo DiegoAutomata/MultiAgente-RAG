@@ -83,8 +83,36 @@ def chunk_text(text: str, chunk_size: int = 1500, overlap: int = 200) -> list[st
     return chunks
 
 
+def compute_pca_2d(embeddings_matrix) -> list[tuple[float, float]]:
+    """
+    Project N×384 embeddings down to 2D using PCA (numpy only, no sklearn).
+    Returns list of (x, y) in range [3..97] for safe CSS % display.
+    """
+    import numpy as np
+    X = np.array(embeddings_matrix, dtype=np.float32)
+    # Center
+    X -= X.mean(axis=0)
+    # SVD (cheaper than eig for tall matrices)
+    try:
+        _, _, Vt = np.linalg.svd(X, full_matrices=False)
+        coords_2d = X @ Vt[:2].T  # N×2
+    except np.linalg.LinAlgError:
+        # Fallback: random projection
+        rng = np.random.default_rng(42)
+        proj = rng.standard_normal((X.shape[1], 2)).astype(np.float32)
+        coords_2d = X @ proj
+
+    # Normalize to [3, 97] range for display
+    mn = coords_2d.min(axis=0)
+    mx = coords_2d.max(axis=0)
+    rng_span = mx - mn
+    rng_span[rng_span == 0] = 1.0  # avoid div-by-zero for degenerate cases
+    coords_norm = (coords_2d - mn) / rng_span * 94 + 3  # → [3, 97]
+    return [(float(row[0]), float(row[1])) for row in coords_norm]
+
+
 def generate_and_store_embeddings(document_id: str):
-    """Phase 2: fetch existing chunks, generate embeddings, update rows in batch."""
+    """Phase 2: fetch existing chunks, generate embeddings, update rows in batch + PCA 2D coords."""
     # Fetch chunks ordered by chunk_index
     rows = supabase.table("document_chunks") \
         .select("id, content, chunk_index") \
@@ -110,14 +138,32 @@ def generate_and_store_embeddings(document_id: str):
         print("⚠️ sentence-transformers not installed. Skipping embeddings.")
         return
 
-    # Update each chunk with its embedding
-    for chunk_id, emb in zip(ids, embeddings):
-        supabase.table("document_chunks") \
-            .update({"embedding": emb}) \
-            .eq("id", chunk_id) \
-            .execute()
+    # Compute PCA 2D projections for visualization
+    coords_2d = []
+    try:
+        coords_2d = compute_pca_2d(embeddings)
+        print(f"   📊 PCA 2D projections computed for {len(coords_2d)} chunks")
+    except Exception as e:
+        print(f"   ⚠️ PCA failed (non-critical): {e}")
 
-    print(f"✅ Embeddings stored for document {document_id}")
+    # Batch upsert embeddings + 2D coords (100 rows per call instead of 1 per chunk)
+    UPSERT_BATCH = 100
+    rows_to_upsert = []
+    for i, (chunk_id, emb) in enumerate(zip(ids, embeddings)):
+        row = {"id": chunk_id, "document_id": document_id, "embedding": emb}
+        if i < len(coords_2d):
+            row["x_2d"] = coords_2d[i][0]
+            row["y_2d"] = coords_2d[i][1]
+        rows_to_upsert.append(row)
+
+    total_batches = (len(rows_to_upsert) + UPSERT_BATCH - 1) // UPSERT_BATCH
+    for i in range(0, len(rows_to_upsert), UPSERT_BATCH):
+        supabase.table("document_chunks") \
+            .upsert(rows_to_upsert[i:i + UPSERT_BATCH], on_conflict="id") \
+            .execute()
+        print(f"   💾 Batch {i // UPSERT_BATCH + 1}/{total_batches} stored (embeddings + 2D)")
+
+    print(f"✅ Embeddings + 2D coords stored for document {document_id}")
 
 
 async def ingest_document(user_id: str, file_path: str, title: str):

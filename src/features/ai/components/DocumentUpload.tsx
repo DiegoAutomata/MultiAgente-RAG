@@ -10,6 +10,7 @@ export function DocumentUpload() {
   const setDocumentUploaded = useRagStore(s => s.setDocumentUploaded);
   const setIsUploadingDocument = useRagStore(s => s.setIsUploadingDocument);
   const setActiveAgent = useRagStore(s => s.setActiveAgent);
+  const triggerRefresh = useRagStore(s => s.triggerRefresh);
   const { user } = useAuth();
 
   const [file, setFile] = useState<File | null>(null);
@@ -133,6 +134,7 @@ export function DocumentUpload() {
         setUploadSuccess(false);
         setDocumentUploaded(false);
         setFile(null);
+        triggerRefresh();
         showMessage("Base de datos vaciada correctamente.");
       } else {
         showMessage(data.error ?? "Error al vaciar la base de datos.", true);
@@ -155,6 +157,7 @@ export function DocumentUpload() {
         setUploadSuccess(false);
         setDocumentUploaded(false);
         setFile(null);
+        triggerRefresh();
       } else {
         showMessage(data.error ?? "Error al eliminar el documento.", true);
       }
