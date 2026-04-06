@@ -1,170 +1,138 @@
-# SaaS Factory V4
+# Enterprise RAG Auditor — Corporate Multi-Agent System
 
-Template production-ready para crear aplicaciones SaaS con desarrollo asistido por IA. Filosofia Agent-First: el usuario dice que quiere, el agente construye todo.
+Sistema de auditoría documental con IA que permite a empresas consultar, analizar y verificar documentos corporativos con **0% de alucinaciones**. Sube un PDF, hazle preguntas, y el sistema te responde exclusivamente con lo que dice el documento — citando las fuentes exactas.
 
-## Que incluye
+**Demo en producción:** https://multiagente-rag.vercel.app
 
-- Next.js 16 (App Router) + TypeScript
-- Supabase (Database + Auth + RLS)
-- Tailwind CSS + shadcn/ui
-- 19 Skills de Claude Code (V4 Skills 2.0)
-- Playwright CLI para QA automatizado
-- AI Templates (Vercel AI SDK v5 + OpenRouter)
-- 5 Design Systems listos para usar
-- Arquitectura Feature-First optimizada para IA
-- Auto-Blindaje: el sistema aprende de cada error
+---
 
-## Quick Start
+## Arquitectura
 
-### 1. Instalar
+![Corporate RAG Multi-Agent System Architecture](public/architecture.png)
+
+El sistema opera como una cadena de agentes especializados:
+
+| Agente | Rol |
+|--------|-----|
+| **Orquestador Principal** | Gestor central de tareas — coordina el flujo completo |
+| **Ruteador Semántico** | Entiende la intención de la consulta y decide el camino (respuesta rápida vs. búsqueda profunda) |
+| **Agente de Búsqueda** | Recupera los fragmentos más relevantes del documento usando búsqueda híbrida (semántica + keywords) |
+| **Embedding Engine** | Convierte texto en vectores numéricos para comparación semántica |
+| **Agente Escritor** | Redacta la respuesta estructurada basada en el contexto recuperado |
+| **Agente de Verificación** | Audita la respuesta contra el documento original — rechaza si detecta alucinación (máx. 3 intentos) |
+
+---
+
+## Funcionalidades
+
+- **Ingesta de PDFs** — Sube documentos extensos; el sistema los divide en chunks y los indexa con embeddings
+- **Chat RAG** — Consultas en lenguaje natural respondidas exclusivamente con contenido del documento
+- **0% Alucinaciones** — El Agente Verificador garantiza que cada dato numérico citado exista textualmente en el documento
+- **Generación de gráficos** — Cuando la respuesta incluye datos cuantitativos, el sistema genera charts interactivos automáticamente
+- **Visualizador vectorial** — Panel en tiempo real que muestra los chunks indexados como scatter plot (proyección PCA 2D)
+- **Motor híbrido** — Combina búsqueda semántica (pgvector) con búsqueda por keywords (full-text) para máxima precisión
+- **Multi-tenant** — Cada usuario tiene su espacio aislado con RLS a nivel de base de datos
+
+---
+
+## Tech Stack
+
+| Capa | Tecnología |
+|------|------------|
+| Framework | Next.js 16 + React 19 + TypeScript |
+| AI Engine | Vercel AI SDK v5 + Claude Sonnet 4.6 (Anthropic) |
+| Router | Claude 3 Haiku (clasificación de intención) |
+| Embeddings | sentence-transformers (Python pipeline) |
+| Base de datos | Supabase + pgvector (búsqueda híbrida) |
+| Auth | Supabase Auth (Email + Google OAuth) |
+| Estilos | Tailwind CSS 3.4 |
+| Estado | Zustand |
+| Deploy | Vercel |
+
+---
+
+## Setup Local
+
+### 1. Instalar dependencias
 
 ```bash
 npm install
 ```
 
-### 2. Variables de Entorno
+### 2. Variables de entorno
 
 ```bash
 cp .env.example .env.local
-# Editar con credenciales de Supabase
 ```
 
-### 3. MCPs (Opcional)
+Completar en `.env.local`:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_anon_key
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
+ANTHROPIC_API_KEY=tu_anthropic_key
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+PYTHON_BIN=/ruta/a/python3
+```
+
+### 3. Base de datos
+
+Aplicar las migraciones en orden desde `supabase/migrations/`:
 
 ```bash
-cp .claude/example.mcp.json .mcp.json
-# Editar con project ref de Supabase
+# Via Supabase Dashboard → SQL Editor, o con Supabase CLI:
+supabase db push
 ```
 
-### 4. Desarrollar
+### 4. Pipeline de embeddings (Python)
+
+```bash
+cd src/features/ai/scripts
+pip install -r requirements.txt
+```
+
+### 5. Correr el servidor
 
 ```bash
 npm run dev
-# Auto-detecta puerto disponible (3000-3006)
-```
-
-## Tech Stack
-
-```yaml
-Runtime: Node.js + TypeScript
-Framework: Next.js 16 (App Router)
-Database: PostgreSQL/Supabase
-Styling: Tailwind CSS 3.4
-Components: shadcn/ui
-State: Zustand
-Validation: Zod
-AI Engine: Vercel AI SDK v5 + OpenRouter
-Testing: Playwright CLI + MCP
-Deploy: Vercel
-```
-
-## Arquitectura Feature-First
-
-```
-src/
-├── app/                      # Next.js App Router
-│   ├── (auth)/              # Rutas auth
-│   ├── (main)/              # Rutas principales
-│   └── layout.tsx
-│
-├── features/                 # Organizadas por funcionalidad
-│   └── [feature]/
-│       ├── components/
-│       ├── hooks/
-│       ├── services/
-│       ├── types/
-│       └── store/
-│
-└── shared/                   # Codigo reutilizable
-    ├── components/
-    ├── hooks/
-    ├── lib/
-    └── types/
-```
-
-## Skills (19 total)
-
-### Para el usuario
-
-| Skill | Que hace |
-|-------|----------|
-| `/new-app` | Entrevista de negocio → BUSINESS_LOGIC.md |
-| `/landing` | Landing page de alta conversion |
-| `/add-login` | Auth completo (Email + Google OAuth + profiles + RLS) |
-| `/bucle-agentico` | Implementar features complejas por fases |
-| `/sprint` | Tareas rapidas sin planificacion |
-| `/prp` | Planificar features complejas antes de implementar |
-| `/ai [template]` | Agregar IA: chat, RAG, vision, tools |
-| `/qa` | QA automatizado con Playwright CLI |
-| `/primer` | Inicializar contexto del proyecto |
-| `/update-sf` | Actualizar a ultima version |
-| `/eject-sf` | Remover SaaS Factory (destructivo) |
-| `/skill-creator` | Crear nuevos skills |
-
-### Automaticos (Claude los activa segun la tarea)
-
-backend, frontend, supabase-admin, codebase-analyst, vercel-deployer, documentacion, calidad
-
-## AI Templates
-
-Bloques LEGO para construir features de IA con Vercel AI SDK v5 + OpenRouter:
-
-| Template | Que hace |
-|----------|----------|
-| setup-base | Configuracion inicial |
-| chat | Chat streaming con useChat |
-| web-search | Busqueda con :online |
-| historial | Persistencia en Supabase |
-| vision | Analisis de imagenes |
-| tools | Funciones/herramientas |
-| rag | pgvector + embeddings |
-| single-call | generateText() puntual |
-| structured-outputs | generateObject() con Zod |
-| generative-ui | LLM decide que componente renderizar |
-
-## Design Systems
-
-5 sistemas visuales listos en `.claude/design-systems/`:
-
-- **Liquid Glass** - iOS-like, transparencias
-- **Gradient Mesh** - Degradados fluidos
-- **Neumorphism** - Soft UI, sombras suaves
-- **Bento Grid** - Grids asimetricos
-- **Neobrutalism** - Bold, bordes duros
-
-## Comandos
-
-```bash
-npm run dev          # Desarrollo (auto-port 3000-3006)
-npm run build        # Build produccion
-npm run typecheck    # TypeScript check
-npm run lint         # ESLint
-```
-
-## Deploy
-
-```bash
-# Vercel (recomendado)
-npm install -g vercel
-vercel
-```
-
-Variables en Vercel Dashboard:
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
-## Estructura .claude/
-
-```
-.claude/
-├── skills/              # 19 Skills (V4 Skills 2.0)
-├── PRPs/                # Product Requirements Proposals
-│   │   └── references/  # AI Templates (11 bloques)
-├── design-systems/      # 5 sistemas de diseno
-├── hooks/               # Scripts en eventos
-└── example.mcp.json     # Config de MCPs
 ```
 
 ---
 
-**SaaS Factory V4** | Agent-First. Todo es un Skill.
+## Flujo de uso
+
+1. **Login** — Ingresa con email o Google
+2. **Sube un PDF** — Arrastra el archivo al panel izquierdo
+3. **Espera la indexación** — El pipeline Python genera embeddings y los almacena en Supabase
+4. **Consulta** — Escribe tu pregunta en el chat; el sistema busca, redacta y verifica la respuesta
+5. **Visualiza** — El panel vectorial muestra los clusters de chunks de tus documentos en tiempo real
+
+---
+
+## Estructura del proyecto
+
+```
+src/
+├── app/
+│   ├── (auth)/login & signup    # Autenticación
+│   ├── api/chat                 # Streaming RAG endpoint
+│   ├── api/upload               # Ingesta de PDFs
+│   ├── api/documents            # CRUD documentos
+│   └── api/chunks/positions     # Coordenadas 2D para visualizador
+│
+├── features/ai/
+│   ├── components/
+│   │   ├── AgentFlowVisualizer  # Pipeline de agentes en tiempo real
+│   │   ├── VectorDBInspector    # Scatter plot de chunks (PCA 2D)
+│   │   ├── DocumentUpload       # Ingesta de PDFs
+│   │   └── ArchitectureDiagram  # Diagrama del sistema
+│   ├── services/rag-agents      # Lógica de búsqueda híbrida
+│   └── scripts/ingest_pipeline  # Pipeline Python de embeddings
+│
+supabase/migrations/             # Schema completo + pgvector + RLS
+```
+
+---
+
+*Enterprise RAG Auditor — Respuestas verificadas, nunca alucinadas.*
