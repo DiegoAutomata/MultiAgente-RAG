@@ -10,9 +10,13 @@ export async function GET() {
   const { data, error } = await supabase
     .from('documents')
     .select('id, title, status, created_at')
+    .eq('user_id', user.id)
     .order('created_at', { ascending: false })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[documents] GET error:', error.message)
+    return NextResponse.json({ error: 'Error al obtener documentos.' }, { status: 500 })
+  }
 
   // Fetch chunk counts per document in parallel
   const docs = data ?? []
@@ -41,6 +45,9 @@ export async function DELETE() {
     .delete()
     .eq('user_id', user.id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[documents] DELETE error:', error.message)
+    return NextResponse.json({ error: 'Error al eliminar documentos.' }, { status: 500 })
+  }
   return NextResponse.json({ success: true, message: 'Base de datos vaciada.' })
 }

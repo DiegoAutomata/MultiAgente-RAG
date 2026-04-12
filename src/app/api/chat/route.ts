@@ -3,6 +3,7 @@ import { streamText, tool, jsonSchema, convertToModelMessages, stepCountIs, type
 import { investigatorAgent } from '@/features/ai/services/rag-agents';
 import { createClient } from '@/lib/supabase/server';
 import { rateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
 
 export const maxDuration = 60;
 
@@ -16,13 +17,42 @@ export async function POST(req: Request) {
   const userId = user.id;
 
   // Rate limit: max 30 messages per user per minute
-  const rl = rateLimit(`chat:${userId}`, 30, 60 * 1000);
+  const rl = await rateLimit(`chat:${userId}`, 30, 60 * 1000);
   if (!rl.allowed) {
     return new Response(JSON.stringify({ error: 'Demasiadas solicitudes. Espera un momento.' }), { status: 429 });
   }
 
-  const body = await req.json();
-  const messages: UIMessage[] = body.messages ?? (body.message ? [body.message] : []);
+  // Validate request body schema
+  const MessagePartSchema = z.object({
+    type: z.string(),
+    text: z.string().max(50_000).optional(),
+  }).passthrough();
+
+  const MessageSchema = z.object({
+    id: z.string(),
+    role: z.enum(['user', 'assistant', 'system', 'tool']),
+    parts: z.array(MessagePartSchema).optional(),
+    content: z.union([z.string().max(50_000), z.array(z.unknown())]).optional(),
+  }).passthrough();
+
+  const BodySchema = z.object({
+    messages: z.array(MessageSchema).max(100).optional(),
+    message: MessageSchema.optional(),
+  });
+
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON.' }), { status: 400 });
+  }
+
+  const parsed = BodySchema.safeParse(body);
+  if (!parsed.success) {
+    return new Response(JSON.stringify({ error: 'Formato de mensaje inválido.' }), { status: 400 });
+  }
+
+  const messages: UIMessage[] = (parsed.data.messages ?? (parsed.data.message ? [parsed.data.message] : [])) as UIMessage[];
 
   if (messages.length === 0) {
     return new Response(JSON.stringify({ error: 'No messages provided' }), { status: 400 });
@@ -86,17 +116,22 @@ FORMATO DE RESPUESTA:
           additionalProperties: false
         }),
         execute: async ({ search_query }: { search_query: string }) => {
-          const query = (search_query ?? '').trim();
-          console.log('[chat] investigate_database called with query:', JSON.stringify(query));
-          
+          const MAX_QUERY_LENGTH = 500;
+
+          const sanitize = (raw: string) =>
+            raw.trim().slice(0, MAX_QUERY_LENGTH).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+          const query = sanitize(search_query ?? '');
+          console.log('[chat] investigate_database called, query length:', query.length, '| preview:', query.slice(0, 40) + (query.length > 40 ? '…' : ''));
+
           if (!query) {
-            // Fallback: use last user message text as query
+            // Fallback: use last user message text as query (bounded)
             const lastUserMsg = messages.filter(m => m.role === 'user').pop();
-            const fallbackQuery = lastUserMsg?.parts
+            const rawFallback = lastUserMsg?.parts
               ?.filter((p: any) => p.type === 'text')
               .map((p: any) => p.text)
               .join(' ') || 'documento';
-            console.log('[chat] Using fallback query from last user message:', fallbackQuery);
+            const fallbackQuery = sanitize(rawFallback);
             const context = await investigatorAgent(fallbackQuery, userId);
             return { status: 'success', context: context || 'No se encontró información relevante.' };
           }
@@ -116,7 +151,7 @@ FORMATO DE RESPUESTA:
           additionalProperties: false
         }),
         execute: async () => {
-          console.log('[chat] list_documents called');
+          console.log('[chat] list_documents called for user:', userId.slice(0, 8) + '…');
           const { createClient } = await import('@supabase/supabase-js');
           const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
           const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -128,7 +163,10 @@ FORMATO DE RESPUESTA:
             .order('created_at', { ascending: false })
             .limit(10);
 
-          if (error) return { error: error.message };
+          if (error) {
+            console.error('[chat] list_documents error:', error.message)
+            return { status: 'error', message: 'No se pudieron obtener los documentos.' }
+          }
           return {
              status: 'success',
              documents: data || []

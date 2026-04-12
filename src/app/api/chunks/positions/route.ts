@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { rateLimit } from '@/lib/rate-limit'
 
 // GET /api/chunks/positions
 // Returns {id, document_id, x_2d, y_2d} for all chunks belonging to the user.
@@ -9,6 +10,12 @@ export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Rate limit: max 30 requests per user per minute (this endpoint is polled by the visualizer)
+  const rl = await rateLimit(`chunks-positions:${user.id}`, 30, 60 * 1000)
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Demasiadas solicitudes.' }, { status: 429 })
+  }
 
   // Get all document IDs belonging to this user
   const { data: docs, error: docsErr } = await supabase

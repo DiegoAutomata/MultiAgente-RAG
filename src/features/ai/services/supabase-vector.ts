@@ -51,7 +51,7 @@ export async function performHybridSearch(
       console.warn("[search] Could not fetch user document IDs:", docsError.message);
     } else {
       userDocIds = userDocs?.map((d: { id: string }) => d.id) ?? [];
-      console.log(`[search] User ${userId} has ${userDocIds.length} documents`);
+      console.log(`[search] User ${userId.slice(0, 8)}… has ${userDocIds.length} documents`);
 
       if (userDocIds.length === 0) {
         console.log("[search] User has no documents, returning empty results");
@@ -103,7 +103,7 @@ export async function performHybridSearch(
     .filter(t => t.length > 3)
     .slice(0, 8);
 
-  console.log("[search] Falling back to direct search with terms:", searchTerms);
+  console.log("[search] Falling back to direct search, term count:", searchTerms.length);
 
   const matchedChunks: Map<string, { id: string; document_id: string; content: string; score: number }> = new Map();
 

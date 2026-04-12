@@ -31,8 +31,9 @@ const nextConfig: NextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              // Next.js needs inline scripts + eval in dev; in prod these are nonces — this is pragmatic for now
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+              // 'unsafe-inline' needed for Next.js hydration scripts (inline event handlers)
+              // 'unsafe-eval' was removed — not needed in production, opens eval() attack surface
+              "script-src 'self' 'unsafe-inline'",
               "style-src 'self' 'unsafe-inline'",
               // Supabase API + Anthropic API calls from server-side (fetch) are not restricted by CSP
               // Only browser-initiated requests matter here

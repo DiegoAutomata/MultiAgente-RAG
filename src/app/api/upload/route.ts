@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     const userId = user.id;
 
     // Rate limit: max 5 uploads per user per hour
-    const rl = rateLimit(`upload:${userId}`, 5, 60 * 60 * 1000);
+    const rl = await rateLimit(`upload:${userId}`, 5, 60 * 60 * 1000);
     if (!rl.allowed) {
       return NextResponse.json(
         { error: 'Límite de subidas alcanzado. Máximo 5 documentos por hora.' },
@@ -35,18 +35,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing file' }, { status: 400 });
     }
 
-    // Validate file type and size (max 200MB)
+    // Validate file size (max 200MB)
     const MAX_SIZE = 200 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       return NextResponse.json({ error: 'Archivo demasiado grande. Máximo 200MB.' }, { status: 413 });
     }
+
+    // Layer 1: extension allowlist
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (!['pdf', 'txt'].includes(ext ?? '')) {
       return NextResponse.json({ error: 'Solo se permiten archivos PDF o TXT.' }, { status: 415 });
     }
 
-    // Save file to /tmp with UUID prefix to prevent race conditions on same filename
+    // Layer 2: MIME type check (defense against accidental wrong files)
+    const ALLOWED_MIME: Record<string, string> = {
+      pdf: 'application/pdf',
+      txt: 'text/plain',
+    };
+    if (file.type && file.type !== ALLOWED_MIME[ext ?? '']) {
+      return NextResponse.json({ error: 'El tipo de archivo no coincide con la extensión.' }, { status: 415 });
+    }
+
+    // Read file into buffer first (needed for magic bytes check)
     const buffer = Buffer.from(await file.arrayBuffer());
+
+    // Layer 3: magic bytes — PDFs always start with %PDF (cannot be spoofed without breaking the parser)
+    if (ext === 'pdf') {
+      const magic = buffer.slice(0, 4).toString('ascii');
+      if (magic !== '%PDF') {
+        return NextResponse.json({ error: 'El archivo no es un PDF válido.' }, { status: 415 });
+      }
+    }
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const tempPath = join('/tmp', `${randomUUID()}-${safeName}`);
     await writeFile(tempPath, buffer);
@@ -56,6 +75,18 @@ export async function POST(req: Request) {
     const projectRoot = path.resolve(process.cwd());
     const scriptPath = join(projectRoot, 'src/features/ai/scripts/ingest_pipeline.py');
     const pythonBin = process.env.PYTHON_BIN || 'python3';
+
+    // Allowlist: only recognizable python binary names/paths are accepted
+    const PYTHON_ALLOWLIST = [
+      /^python3?$/,
+      /^\/usr\/(local\/)?bin\/python3?(\.\d+)?$/,
+      /^\/home\/[a-zA-Z0-9_-]+\/\.venvs\/[a-zA-Z0-9_.-]+\/bin\/python3?$/,
+      /^\/opt\/[a-zA-Z0-9_.-]+\/bin\/python3?$/,
+    ];
+    if (!PYTHON_ALLOWLIST.some(pattern => pattern.test(pythonBin))) {
+      console.error('[upload] Rejected PYTHON_BIN value:', pythonBin);
+      return NextResponse.json({ error: 'Error de configuración del servidor.' }, { status: 500 });
+    }
 
     // Launch full pipeline in background: parse (pdfplumber) + chunk + insert + embeddings
     const child = spawn(pythonBin, [scriptPath, userId, tempPath], {
@@ -75,6 +106,6 @@ export async function POST(req: Request) {
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('[upload] Error:', message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: 'Error interno al procesar el archivo.' }, { status: 500 });
   }
 }
