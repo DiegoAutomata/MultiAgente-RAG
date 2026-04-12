@@ -32,8 +32,9 @@ const nextConfig: NextConfig = {
             value: [
               "default-src 'self'",
               // 'unsafe-inline' needed for Next.js hydration scripts (inline event handlers)
-              // 'unsafe-eval' was removed — not needed in production, opens eval() attack surface
-              "script-src 'self' 'unsafe-inline'",
+              // 'unsafe-eval' needed in development for React DevTools callstack reconstruction
+              // In production builds, Next.js is compiled and doesn't need eval()
+              "script-src 'self' 'unsafe-inline'" + (process.env.NODE_ENV === 'development' ? " 'unsafe-eval'" : ""),
               "style-src 'self' 'unsafe-inline'",
               // Supabase API + Anthropic API calls from server-side (fetch) are not restricted by CSP
               // Only browser-initiated requests matter here

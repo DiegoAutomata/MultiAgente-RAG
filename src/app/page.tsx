@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+import { createClient } from '@/lib/supabase/server'
 import { Chat } from "@/features/ai/components/Chat";
 import { DocumentUpload } from "@/features/ai/components/DocumentUpload";
 import { VectorDBInspector } from "@/features/ai/components/VectorDBInspector";
@@ -5,7 +7,10 @@ import { AgentFlowVisualizer } from "@/features/ai/components/AgentFlowVisualize
 import { CableConnector } from "@/features/ai/components/CableConnector";
 import { UserMenu } from "@/features/auth/components/UserMenu";
 
-export default function Home() {
+export default async function Home() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-[#080a0f]">
 
