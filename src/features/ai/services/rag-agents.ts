@@ -1,8 +1,5 @@
 import { performHybridSearch } from "./supabase-vector";
 
-// @ts-ignore
-import { pipeline } from '@xenova/transformers';
-
 class EmbeddingPipeline {
   static task = 'feature-extraction';
   static model = 'Xenova/all-MiniLM-L6-v2';
@@ -10,7 +7,13 @@ class EmbeddingPipeline {
 
   static async getInstance() {
     if (this.instance === null) {
-      this.instance = await (pipeline as any)(this.task, this.model);
+      // Dynamic import: runs lazily inside an async function so any load
+      // failure (WASM/ONNX missing in serverless) is caught by the caller's
+      // try/catch instead of crashing the whole module at import time.
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      // @ts-ignore — @xenova/transformers has no official TS types
+      const { pipeline } = await import('@xenova/transformers');
+      this.instance = await pipeline(this.task as any, this.model);
     }
     return this.instance;
   }
