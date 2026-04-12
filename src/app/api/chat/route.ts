@@ -8,6 +8,20 @@ import { z } from 'zod';
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+  try {
+    return await handleChat(req);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error('[chat] Unhandled exception:', msg, stack);
+    return new Response(JSON.stringify({ error: `Internal error: ${msg}` }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}
+
+async function handleChat(req: Request) {
   // Validate session
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -22,7 +36,15 @@ export async function POST(req: Request) {
     return new Response(JSON.stringify({ error: 'Demasiadas solicitudes. Espera un momento.' }), { status: 429 });
   }
 
-  // Validate request body schema
+  // Parse and validate body
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return new Response(JSON.stringify({ error: 'Invalid JSON.' }), { status: 400 });
+  }
+
+  // Validate message structure with Zod
   const MessagePartSchema = z.object({
     type: z.string(),
     text: z.string().max(50_000).optional(),
@@ -40,15 +62,9 @@ export async function POST(req: Request) {
     message: MessageSchema.optional(),
   });
 
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: 'Invalid JSON.' }), { status: 400 });
-  }
-
   const parsed = BodySchema.safeParse(body);
   if (!parsed.success) {
+    console.warn('[chat] Zod validation failed:', JSON.stringify(parsed.error.issues));
     return new Response(JSON.stringify({ error: 'Formato de mensaje inválido.' }), { status: 400 });
   }
 
