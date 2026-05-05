@@ -64,6 +64,11 @@ Thumbs.db
 supabase/.branches
 supabase/.temp
 
+# Build artifacts
+build_output.txt
+build_output_clean.txt
+tsconfig.tsbuildinfo
+
 # Python
 venv/
 __pycache__/

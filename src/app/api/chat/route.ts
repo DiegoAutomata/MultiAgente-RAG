@@ -14,7 +14,7 @@ export async function POST(req: Request) {
     const msg = err instanceof Error ? err.message : String(err);
     const stack = err instanceof Error ? err.stack : undefined;
     console.error('[chat] Unhandled exception:', msg, stack);
-    return new Response(JSON.stringify({ error: `Internal error: ${msg}` }), {
+    return new Response(JSON.stringify({ error: 'An error occurred. Please try again.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

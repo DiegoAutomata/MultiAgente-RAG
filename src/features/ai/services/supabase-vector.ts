@@ -108,10 +108,11 @@ export async function performHybridSearch(
   const matchedChunks: Map<string, { id: string; document_id: string; content: string; score: number }> = new Map();
 
   for (const term of searchTerms) {
+    const escaped = term.replace(/[%_]/g, '\\$&');
     let query = supabase
       .from("document_chunks")
       .select("id, document_id, content")
-      .ilike("content", `%${term}%`)
+      .ilike("content", `%${escaped}%`)
       .limit(5);
 
     if (userDocIds) {

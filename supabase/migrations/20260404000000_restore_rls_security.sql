@@ -60,7 +60,7 @@ CREATE OR REPLACE FUNCTION match_document_chunks_hybrid(
   full_text_weight FLOAT DEFAULT 1.0,
   semantic_weight FLOAT DEFAULT 1.0,
   rrf_k INT DEFAULT 50,
-  filter_user_id UUID DEFAULT NULL
+  filter_user_id UUID DEFAULT auth.uid()
 )
 RETURNS TABLE (
   id UUID,
@@ -74,6 +74,10 @@ SET search_path = public
 AS $$
 #variable_conflict use_column
 BEGIN
+  IF filter_user_id IS NULL THEN
+    RAISE EXCEPTION 'filter_user_id is required';
+  END IF;
+
   RETURN QUERY
   WITH full_text AS (
     SELECT
@@ -83,7 +87,7 @@ BEGIN
       ) AS rank_ix
     FROM document_chunks dc
     WHERE dc.fts @@ plainto_tsquery('spanish', query_text)
-      AND (filter_user_id IS NULL OR dc.user_id = filter_user_id)
+      AND dc.user_id = filter_user_id
     ORDER BY rank_ix
     LIMIT match_count * 2
   ),
@@ -94,7 +98,7 @@ BEGIN
         ORDER BY dc.embedding <=> query_embedding
       ) AS rank_ix
     FROM document_chunks dc
-    WHERE (filter_user_id IS NULL OR dc.user_id = filter_user_id)
+    WHERE dc.user_id = filter_user_id
     ORDER BY rank_ix
     LIMIT match_count * 2
   )
